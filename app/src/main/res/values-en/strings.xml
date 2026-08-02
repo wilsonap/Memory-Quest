@@ -1,0 +1,183 @@
+<resources>
+    <string name="app_name">Memory Quest</string>
+    <string name="settings_title">⚙ SETTINGS</string>
+
+    <!-- Player Profile -->
+    <string name="settings_player_name">Player Name</string>
+    <string name="settings_edit">Edit</string>
+    <string name="settings_edit_name_title">Edit Player Name</string>
+    <string name="settings_edit_name_subtitle">Enter your new name to display on ranking and profile.</string>
+
+    <!-- Preferences -->
+    <string name="settings_audio_title">Audio &amp; Effects Preferences</string>
+    <string name="settings_sfx">Sound Effects</string>
+    <string name="settings_sfx_volume">SFX Volume</string>
+    <string name="settings_music">Background Music</string>
+    <string name="settings_music_volume">Music Volume</string>
+    <string name="settings_vibration">Touch Vibration</string>
+
+    <!-- Visual and Language -->
+    <string name="settings_visual_language_title">Appearance &amp; Language</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_theme_system">System</string>
+
+    <!-- Links -->
+    <string name="settings_privacy_policy">Privacy Policy</string>
+    <string name="settings_support">Support</string>
+    <string name="settings_ranking">View Ranking</string>
+    <string name="settings_about_title">About</string>
+    <string name="settings_developer">Developed by AutoCheckIA</string>
+
+    <!-- Backup -->
+    <string name="settings_backup_title">💾 Progress Backup &amp; Safety</string>
+    <string name="settings_backup_desc">Your progress is saved locally via Room Database with secure migrations.</string>
+    <string name="settings_export_json">Export JSON</string>
+    <string name="settings_import_json">Import JSON</string>
+    <string name="settings_reset_defaults">Restore Default Settings</string>
+
+    <!-- Common -->
+    <string name="confirm">Confirm</string>
+    <string name="cancel">Cancel</string>
+    <string name="level_badge">LEVEL %1$d</string>
+    <string name="back">Back</string>
+
+    <!-- Home Screen -->
+    <string name="home_explorer_level">EXPLORER LEVEL %1$d</string>
+    <string name="home_next_challenge">NEXT CHALLENGE: LEVEL %1$d</string>
+    <string name="home_play">PLAY</string>
+    <string name="home_shop_title">SHOP</string>
+    <string name="home_shop_subtitle">Themes &amp; Boosters</string>
+    <string name="home_ranking_title">RANKING</string>
+    <string name="home_ranking_subtitle">Hall of Fame</string>
+    <string name="home_stats_title">STATS</string>
+    <string name="home_stats_subtitle">Your Records</string>
+    <string name="home_config_title">SETTINGS</string>
+    <string name="home_config_subtitle">Audio &amp; Profile</string>
+    <string name="home_achievements_button">🎖 GAME ACHIEVEMENTS</string>
+    <string name="home_edit_name">Edit Name</string>
+    <string name="home_footer_text">Memory Quest • Immersive UI</string>
+
+    <!-- Game Screen -->
+    <string name="game_preview_text">👀 Memorize the cards! Starting in %1$ds</string>
+    <string name="game_time">Time: %1$s</string>
+    <string name="game_pairs">Pairs: %1$d/%2$d</string>
+    <string name="game_combo">COMBO x%1$d!</string>
+    <string name="game_boosters">BOOSTERS:</string>
+    <string name="game_hint_button">Hint (%1$d)</string>
+    <string name="game_reveal_button">Reveal</string>
+    <string name="game_freeze_button">Freeze (10s)</string>
+    <string name="game_victory_title">🎉 LEVEL %1$d COMPLETED!</string>
+    <string name="game_victory_subtitle">Impressive! Your memory is sharp.</string>
+    <string name="game_coins_earned">+%1$d Coins</string>
+    <string name="game_bonus">Bonus: %1$d</string>
+    <string name="game_next_level">Next Level ➔</string>
+    <string name="game_defeat_title">💔 NO LIVES LEFT!</string>
+    <string name="game_defeat_subtitle">Don\'t give up! Try again to overcome this challenge.</string>
+    <string name="game_restart_level">Try Again 🔄</string>
+    <string name="game_shop">Shop 🛒</string>
+    <string name="game_home">Home 🏠</string>
+
+    <!-- Shop Screen -->
+    <string name="shop_title">🎁 MEMORY QUEST SHOP</string>
+    <string name="shop_tab_boosters">🔮 Boosters</string>
+    <string name="shop_tab_themes">🎨 Themes</string>
+    <string name="shop_tab_frames">🖼️ Frames</string>
+    <string name="shop_buy">Buy %1$d 💰</string>
+    <string name="shop_equipped">Equipped</string>
+    <string name="shop_equip">Equip</string>
+    <string name="shop_owned">Owned</string>
+
+    <!-- Shop Items - Boosters -->
+    <string name="booster_life_title">❤️ Extra Life</string>
+    <string name="booster_life_desc">Start the next level with +1 extra life (Max +2 lives).</string>
+    <string name="booster_hint_title">💡 Hint Pack (x3)</string>
+    <string name="booster_hint_desc">Instantly highlight a matching pair of cards during the game.</string>
+    <string name="booster_reveal_title">👀 Reveal Pair</string>
+    <string name="booster_reveal_desc">Automatically flips 1 pair permanently on the board.</string>
+    <string name="booster_time_title">⏱ Memorization (+3s)</string>
+    <string name="booster_time_desc">Increases initial memorization time before cards flip.</string>
+    <string name="booster_freeze_title">❄ Freeze Clock</string>
+    <string name="booster_freeze_desc">Pauses the game timer for 10 seconds for you to think.</string>
+
+    <!-- Shop Items - Frames -->
+    <string name="frame_classic_title">Classic Frame</string>
+    <string name="frame_classic_desc">Standard blue and purple frame.</string>
+    <string name="frame_golden_title">Golden Frame</string>
+    <string name="frame_golden_desc">Shining gold borders with sparkles.</string>
+    <string name="frame_neon_title">Cyber Neon Frame</string>
+    <string name="frame_neon_desc">Electric cyan and magenta glow.</string>
+    <string name="frame_magic_title">Magic Frame</string>
+    <string name="frame_magic_desc">Purple aura with mystical star glow.</string>
+
+    <!-- Shop Items - Themes -->
+    <string name="theme_animals_name">Animals</string>
+    <string name="theme_animals_desc">Charming animals from around the world!</string>
+    <string name="theme_fruits_name">Fruits</string>
+    <string name="theme_fruits_desc">Colorful and delicious fruits!</string>
+    <string name="theme_cars_name">Cars &amp; Vehicles</string>
+    <string name="theme_cars_desc">Awesome machines and high-speed vehicles!</string>
+    <string name="theme_food_name">Food</string>
+    <string name="theme_food_desc">Pizzas, burgers and fantastic desserts!</string>
+    <string name="theme_space_name">Planets &amp; Space</string>
+    <string name="theme_space_desc">Mysteries of the universe, stars and galaxies!</string>
+    <string name="theme_dinosaurs_name">Dinosaurs</string>
+    <string name="theme_dinosaurs_desc">Imposing prehistoric beasts!</string>
+    <string name="theme_holidays_name">Holidays &amp; Parties</string>
+    <string name="theme_holidays_desc">Joyful and magical celebrations!</string>
+    <string name="theme_emojis_name">Emojis &amp; Expressions</string>
+    <string name="theme_emojis_desc">Expressive and fun faces!</string>
+
+    <!-- Ranking Screen -->
+    <string name="ranking_title">🏆 TOP 100 HALL OF FAME</string>
+    <string name="ranking_firebase_online">Firebase Firestore Online</string>
+    <string name="ranking_offline_mode">Cache / Offline Mode</string>
+    <string name="ranking_sync_realtime">Top 100 synced in real-time</string>
+    <string name="ranking_your_position">Your Ranking Position</string>
+    <string name="ranking_rank_format">#%1$d Place</string>
+    <string name="ranking_points_format">%1$d Points</string>
+    <string name="ranking_level_format">Level %1$d</string>
+    <string name="ranking_refresh">Refresh Ranking</string>
+    <string name="ranking_you_badge">YOU</string>
+
+    <!-- Stats Screen -->
+    <string name="stats_title">📊 GAME STATISTICS</string>
+    <string name="stats_highest_level">Highest Level</string>
+    <string name="stats_time_played">Time Played</string>
+    <string name="stats_total_coins">Total Coins</string>
+    <string name="stats_pairs_found">Pairs Found</string>
+    <string name="stats_accuracy">Accuracy</string>
+    <string name="stats_win_rate">Win Rate</string>
+    <string name="stats_games_played">Games Played</string>
+
+    <!-- Achievements Screen -->
+    <string name="achievements_title">🎖 GAME ACHIEVEMENTS</string>
+    <string name="achievements_unlocked">Completed!</string>
+    <string name="achievements_progress">%1$d / %2$d</string>
+
+    <!-- Dialogs -->
+    <string name="dialog_welcome_title">Welcome to Memory Quest!</string>
+    <string name="dialog_welcome_subtitle">What is your name, Memory Master?</string>
+    <string name="dialog_your_name">Your Name</string>
+    <string name="dialog_type_name_error">Please enter your name.</string>
+    <string name="dialog_start_adventure">Start Adventure! 🚀</string>
+
+    <!-- Username Validation & Offline Sync -->
+    <string name="val_err_length">Name must be between 3 and 20 characters.</string>
+    <string name="val_err_allowed_chars">Use only letters, numbers, and _.</string>
+    <string name="val_err_start_char">Name must start with a letter or number.</string>
+    <string name="val_err_digits_only">Name cannot consist only of numbers.</string>
+    <string name="val_err_consecutive_underscores">Name cannot contain more than two consecutive underscores (_).</string>
+    <string name="val_err_reserved">This name is reserved.</string>
+    <string name="val_err_unavailable">This name is not available.</string>
+    <string name="val_notice_offline">Offline: name will be confirmed when you go online.</string>
+    <string name="username_awaiting_confirmation">Name awaiting confirmation</string>
+    <string name="username_conflict_title">Username In Use</string>
+    <string name="username_conflict_desc">The chosen name is already in use. Choose another to enter the ranking.</string>
+    <string name="username_suggestions_title">Suggested available names:</string>
+    <string name="username_suggestions_offline_title">Suggestions to try when online:</string>
+    <string name="username_checking_availability">Checking availability...</string>
+    <string name="username_available">Name available! ✓</string>
+</resources>

@@ -1,0 +1,166 @@
+<resources>
+    <string name="app_name">Memory Quest</string>
+    <string name="settings_title">⚙ CONFIGURAÇÕES</string>
+
+    <!-- Player Profile -->
+    <string name="settings_player_name">Nome do Jogador</string>
+    <string name="settings_edit">Editar</string>
+    <string name="settings_edit_name_title">Editar Nome do Jogador</string>
+    <string name="settings_edit_name_subtitle">Digite seu novo nome para exibir no ranking e perfil.</string>
+
+    <!-- Preferences -->
+    <string name="settings_audio_title">Preferências de Áudio e Efeitos</string>
+    <string name="settings_sfx">Efeitos Sonoros</string>
+    <string name="settings_sfx_volume">Volume dos Efeitos</string>
+    <string name="settings_music">Música de Fundo</string>
+    <string name="settings_music_volume">Volume da Música</string>
+    <string name="settings_vibration">Vibração ao Tocar</string>
+
+    <!-- Visual and Language -->
+    <string name="settings_visual_language_title">Visual e Idioma</string>
+    <string name="settings_language">Idioma</string>
+    <string name="settings_theme">Tema</string>
+    <string name="settings_theme_light">Claro</string>
+    <string name="settings_theme_dark">Escuro</string>
+    <string name="settings_theme_system">Sistema</string>
+
+    <!-- Links -->
+    <string name="settings_privacy_policy">Política de Privacidade</string>
+    <string name="settings_support">Suporte</string>
+    <string name="settings_ranking">Ver Ranking</string>
+    <string name="settings_about_title">Sobre</string>
+    <string name="settings_developer">Desenvolvido por AutoCheckIA</string>
+
+    <!-- Backup -->
+    <string name="settings_backup_title">💾 Backup e Segurança do Progresso</string>
+    <string name="settings_backup_desc">Seu progresso é gravado localmente via Room Database com Migrações seguras.</string>
+    <string name="settings_export_json">Exportar JSON</string>
+    <string name="settings_import_json">Importar JSON</string>
+    <string name="settings_reset_defaults">Restaurar Configurações Padrão</string>
+
+    <!-- Common -->
+    <string name="confirm">Confirmar</string>
+    <string name="cancel">Cancelar</string>
+    <string name="level_badge">FASE %1$d</string>
+    <string name="back">Voltar</string>
+
+    <!-- Home Screen -->
+    <string name="home_explorer_level">EXPLORADOR NÍVEL %1$d</string>
+    <string name="home_next_challenge">PRÓXIMO DESAFIO: FASE %1$d</string>
+    <string name="home_play">JOGAR</string>
+    <string name="home_shop_title">LOJA</string>
+    <string name="home_shop_subtitle">Temas &amp; Boosters</string>
+    <string name="home_ranking_title">RANKING</string>
+    <string name="home_ranking_subtitle">Hall da Fama</string>
+    <string name="home_stats_title">STATS</string>
+    <string name="home_stats_subtitle">Seus Registros</string>
+    <string name="home_config_title">CONFIG</string>
+    <string name="home_config_subtitle">Áudio &amp; Perfil</string>
+    <string name="home_achievements_button">🎖 CONQUISTAS DO JOGO</string>
+    <string name="home_edit_name">Editar Nome</string>
+    <string name="home_footer_text">Memory Quest • Immersive UI</string>
+
+    <!-- Game Screen -->
+    <string name="game_preview_text">👀 Memorize as cartas! Início em %1$ds</string>
+    <string name="game_time">Tempo: %1$s</string>
+    <string name="game_pairs">Pares: %1$d/%2$d</string>
+    <string name="game_combo">COMBO x%1$d!</string>
+    <string name="game_boosters">BOOSTERS:</string>
+    <string name="game_hint_button">Dica (%1$d)</string>
+    <string name="game_reveal_button">Revelar</string>
+    <string name="game_freeze_button">Congelar (10s)</string>
+    <string name="game_victory_title">🎉 FASE %1$d CONCLUÍDA!</string>
+    <string name="game_victory_subtitle">Impressionante! Sua memória está afiada.</string>
+    <string name="game_coins_earned">+%1$d Moedas</string>
+    <string name="game_bonus">Bônus: %1$d</string>
+    <string name="game_next_level">Próxima Fase ➔</string>
+    <string name="game_defeat_title">💔 SEM VIDAS RESTANTES!</string>
+    <string name="game_defeat_subtitle">Não desista! Tente novamente para superar este desafio.</string>
+    <string name="game_restart_level">Tentar Novamente 🔄</string>
+    <string name="game_shop">Loja 🛒</string>
+    <string name="game_home">Início 🏠</string>
+
+    <!-- Shop Screen -->
+    <string name="shop_title">🎁 LOJA MEMORY QUEST</string>
+    <string name="shop_tab_boosters">🔮 Boosters</string>
+    <string name="shop_tab_themes">🎨 Temas</string>
+    <string name="shop_tab_frames">🖼️ Molduras</string>
+    <string name="shop_buy">Comprar %1$d 💰</string>
+    <string name="shop_equipped">Equipado</string>
+    <string name="shop_equip">Equipar</string>
+    <string name="shop_owned">Comprado</string>
+
+    <!-- Shop Items - Boosters -->
+    <string name="booster_life_title">❤️ Vida Extra</string>
+    <string name="booster_life_desc">Comece a próxima fase com +1 vida extra (Máx +2 vidas).</string>
+    <string name="booster_hint_title">💡 Pacote de Dicas (x3)</string>
+    <string name="booster_hint_desc">Destaque instantaneamente um par de cartas correspondentes durante o jogo.</string>
+    <string name="booster_reveal_title">👀 Revelar Par</string>
+    <string name="booster_reveal_desc">Vira permanentemente 1 par no tabuleiro de forma automática.</string>
+    <string name="booster_time_title">⏱ Memorização (+3s)</string>
+    <string name="booster_time_desc">Aumenta o tempo de memorização inicial antes de virar as cartas.</string>
+    <string name="booster_freeze_title">❄ Congelar Relógio</string>
+    <string name="booster_freeze_desc">Pausa o cronômetro do jogo por 10 segundos para você raciocinar.</string>
+
+    <!-- Shop Items - Frames -->
+    <string name="frame_classic_title">Moldura Clássica</string>
+    <string name="frame_classic_desc">Moldura azul e roxa padrão.</string>
+    <string name="frame_golden_title">Moldura Dourada</string>
+    <string name="frame_golden_desc">Bordas brilhantes em ouro com partículas.</string>
+    <string name="frame_neon_title">Moldura Cyber Neon</string>
+    <string name="frame_neon_desc">Brilho elétrico ciano e magenta.</string>
+    <string name="frame_magic_title">Moldura Mágica</string>
+    <string name="frame_magic_desc">Aura roxa com brilho estelar místico.</string>
+
+    <!-- Shop Items - Themes -->
+    <string name="theme_animals_name">Animais</string>
+    <string name="theme_animals_desc">Encantadores animais de todo o mundo!</string>
+    <string name="theme_fruits_name">Frutas</string>
+    <string name="theme_fruits_desc">Frutas coloridas e deliciosas!</string>
+    <string name="theme_cars_name">Carros &amp; Veículos</string>
+    <string name="theme_cars_desc">Máquinas incríveis e transportes velocíssimos!</string>
+    <string name="theme_food_name">Comidas</string>
+    <string name="theme_food_desc">Pizzas, hambúrgueres e sobremesas fantásticas!</string>
+    <string name="theme_space_name">Planetas &amp; Espaço</string>
+    <string name="theme_space_desc">Mistérios do universo, estrelas e galáxias!</string>
+    <string name="theme_dinosaurs_name">Dinossauros</string>
+    <string name="theme_dinosaurs_desc">Feras pré-históricas imponentes!</string>
+    <string name="theme_holidays_name">Natal &amp; Festas</string>
+    <string name="theme_holidays_desc">Celebrações alegres e mágicas!</string>
+    <string name="theme_emojis_name">Emojis &amp; Expressões</string>
+    <string name="theme_emojis_desc">Rostos expressivos e divertidos!</string>
+
+    <!-- Ranking Screen -->
+    <string name="ranking_title">🏆 HALL DA FAMA TOP 100</string>
+    <string name="ranking_firebase_online">Firebase Firestore Online</string>
+    <string name="ranking_offline_mode">Modo Cache / Offline</string>
+    <string name="ranking_sync_realtime">Top 100 sincronizado em tempo real</string>
+    <string name="ranking_your_position">Sua Posição no Ranking</string>
+    <string name="ranking_rank_format">#%1$d Lugar</string>
+    <string name="ranking_points_format">%1$d Pontos</string>
+    <string name="ranking_level_format">Fase %1$d</string>
+    <string name="ranking_refresh">Atualizar Ranking</string>
+    <string name="ranking_you_badge">VOCÊ</string>
+
+    <!-- Stats Screen -->
+    <string name="stats_title">📊 ESTATÍSTICAS DE JOGO</string>
+    <string name="stats_highest_level">Maior Fase</string>
+    <string name="stats_time_played">Tempo Jogado</string>
+    <string name="stats_total_coins">Total de Moedas</string>
+    <string name="stats_pairs_found">Pares Encontrados</string>
+    <string name="stats_accuracy">Precisão de Acertos</string>
+    <string name="stats_win_rate">Taxa de Vitórias</string>
+    <string name="stats_games_played">Partidas Jogadas</string>
+
+    <!-- Achievements Screen -->
+    <string name="achievements_title">🎖 CONQUISTAS DO JOGO</string>
+    <string name="achievements_unlocked">Concluída!</string>
+    <string name="achievements_progress">%1$d / %2$d</string>
+
+    <!-- Dialogs -->
+    <string name="dialog_welcome_title">Bem-vindo ao Memory Quest!</string>
+    <string name="dialog_welcome_subtitle">Qual é o seu nome, Mestre da Memória?</string>
+    <string name="dialog_your_name">Seu Nome</string>
+    <string name="dialog_type_name_error">Por favor, digite seu nome.</string>
+    <string name="dialog_start_adventure">Começar Aventura! 🚀</string>
+</resources>

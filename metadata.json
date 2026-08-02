@@ -1,0 +1,6 @@
+{
+  "name": "Memory Quest",
+  "description": "Jogo da Memória moderno em Jetpack Compose com sistema de fases, loja, estatísticas, conquistas e persistência com Room.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
