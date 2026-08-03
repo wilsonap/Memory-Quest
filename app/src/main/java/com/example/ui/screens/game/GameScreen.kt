@@ -61,11 +61,15 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.res.stringResource
 import com.example.R
+import com.example.avatar.model.AvatarType
+import com.example.avatar.ui.AvatarImage
+import com.example.data.local.entity.PlayerEntity
 import com.example.data.model.LevelConfig
 import com.example.ui.components.BannerAdView
 import com.example.ui.components.Card3D
 import com.example.ui.components.SparkleParticleOverlay
 import com.example.ui.components.TopGameBar
+import com.example.ui.screens.game.components.VictoryScreen
 import com.example.ui.theme.ImmersiveBg
 import com.example.ui.theme.ImmersivePrimary
 import com.example.ui.theme.ImmersivePrimaryContainer
@@ -86,6 +90,7 @@ private fun Context.findActivity(): Activity? {
 fun GameScreen(
     state: GameState,
     coins: Int,
+    player: PlayerEntity? = null,
     onCardClick: (Int) -> Unit,
     onUseHint: () -> Unit,
     onRevealPair: () -> Unit,
@@ -323,111 +328,17 @@ fun GameScreen(
             }
         }
 
-        // Victory Dialog
+        // Victory Screen Overlay
         if (state.status is GameUiStatus.LevelCompleted) {
             val completed = state.status as GameUiStatus.LevelCompleted
-            Dialog(
-                onDismissRequest = {},
-                properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(24.dp),
-                    color = Color(0xFF1E143B),
-                    tonalElevation = 12.dp,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                        .border(2.dp, Color(0xFF06D6A0), RoundedCornerShape(24.dp))
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(text = "🎉", fontSize = 56.sp)
-
-                        Text(
-                            text = stringResource(R.string.game_victory_title, completed.levelCompletedNumber),
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFF06D6A0)
-                            ),
-                            textAlign = TextAlign.Center
-                        )
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        // Rewards card
-                        Surface(
-                            color = Color(0xFF112E25),
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                RewardRow(title = "Recompensa de Fase", value = "+100 Moedas 💰")
-                                if (completed.flawlessBonus > 0) {
-                                    RewardRow(title = "Bônus Sem Erros ⭐", value = "+${completed.flawlessBonus} Moedas 💰")
-                                }
-                                if (completed.comboBonus > 0) {
-                                    RewardRow(title = "Bônus de Combo 🔥", value = "+${completed.comboBonus} Moedas 💰")
-                                }
-                                RewardRow(title = "Total Ganho", value = "+${completed.coinsEarned} Moedas 💰", isBold = true)
-                                RewardRow(title = "Tempo de Jogo", value = formatTime(completed.timeSeconds))
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(20.dp))
-
-                        Button(
-                            onClick = onNextLevel,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7209B7)),
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(50.dp)
-                                .testTag("next_level_button")
-                        ) {
-                            Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = stringResource(R.string.game_next_level),
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OutlinedButton(
-                                onClick = onRestartLevel,
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(imageVector = Icons.Default.Refresh, contentDescription = null, tint = Color.White)
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Repetir", color = Color.White)
-                            }
-
-                            OutlinedButton(
-                                onClick = onBackToHome,
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(imageVector = Icons.Default.Home, contentDescription = null, tint = Color.White)
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Menu", color = Color.White)
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-                        BannerAdView(isAdsRemoved = isAdsRemoved)
-                    }
-                }
-            }
+            VictoryScreen(
+                completed = completed,
+                player = player,
+                onNextLevel = onNextLevel,
+                onRestartLevel = onRestartLevel,
+                onBackToHome = onBackToHome,
+                isAdsRemoved = isAdsRemoved
+            )
         }
 
         // Defeat Dialog

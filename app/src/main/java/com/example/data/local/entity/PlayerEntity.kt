@@ -20,5 +20,9 @@ data class PlayerEntity(
     val pendingDisplayName: String = "",
     val pendingNormalizedName: String = "",
     val confirmedDisplayName: String = "",
-    val confirmedNormalizedName: String = ""
+    val confirmedNormalizedName: String = "",
+    val avatarType: String = "PRESET",
+    val avatarPresetId: String = "avatar_01",
+    val avatarLocalPath: String = "",
+    val avatarUpdatedAt: Long = System.currentTimeMillis()
 )

@@ -22,6 +22,8 @@ import com.example.ui.theme.MemoryQuestTheme
 import com.example.ui.viewmodel.GameViewModel
 import com.example.ui.viewmodel.MainViewModel
 
+import com.example.config.AdMobManager
+
 class MainActivity : AppCompatActivity() {
 
     private val mainViewModel: MainViewModel by viewModels()
@@ -32,15 +34,14 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        try {
-            MobileAds.initialize(this) {}
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        // Initialize AdMob via centralized AdMobManager
+        AdMobManager.initialize(this)
 
         // Initialize offline sync connectivity observer
         connectivityObserver = ConnectivityObserver(applicationContext) {
-            SyncManager.getInstance(applicationContext).triggerSync()
+            SyncManager.triggerImmediateSync(applicationContext)
+            com.example.sync.EnsureLeaderboardWorker.schedule(applicationContext)
+            mainViewModel.syncLeaderboard()
         }
         connectivityObserver.startListening()
 

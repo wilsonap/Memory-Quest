@@ -31,12 +31,15 @@ import com.example.data.model.UsernameUiState
 import com.example.data.repository.UsernameRepository
 import com.example.data.repository.UsernameReservationResult
 import com.example.sync.ConnectivityObserver
+import com.example.sync.EnsureLeaderboardWorker
 import com.example.sync.ValidatePendingUsernameWorker
 import com.example.util.UsernameNormalizer
 import com.example.util.UsernameSuggestionGenerator
 import com.example.util.UsernameValidator
+import com.google.firebase.firestore.Source
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -60,6 +63,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _leaderboardError = MutableStateFlow<String?>(null)
     val leaderboardError: StateFlow<String?> = _leaderboardError.asStateFlow()
+
+    private val _lastLeaderboardFetchTime = MutableStateFlow<Long>(0L)
+    val lastLeaderboardFetchTime: StateFlow<Long> = _lastLeaderboardFetchTime.asStateFlow()
+
+    private val _isOnline = MutableStateFlow(true)
+    val isOnline: StateFlow<Boolean> = _isOnline.asStateFlow()
+
+    private var connectivityObserver: ConnectivityObserver? = null
+    private var wasOffline = false
+    private var leaderboardFetchJob: Job? = null
 
     val playerState: StateFlow<PlayerEntity?> = repository.playerFlow.stateIn(
         scope = viewModelScope,
@@ -112,14 +125,49 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     init {
         audioManager.observeSettings(dataStore, viewModelScope)
 
+        val context = getApplication<Application>()
+        val initialOnline = ConnectivityObserver(context) {}.isNetworkAvailable()
+        _isOnline.value = initialOnline
+
+        connectivityObserver = ConnectivityObserver(context) {
+            viewModelScope.launch {
+                val currentlyOnline = ConnectivityObserver(context) {}.isNetworkAvailable()
+                _isOnline.value = currentlyOnline
+                Log.d("MemoryQuestRanking", "Estado da conexão: isOnline=$currentlyOnline")
+
+                if (currentlyOnline && wasOffline) {
+                    wasOffline = false
+                    Log.d("MemoryQuestRanking", "Conexão reestabelecida. Executando apenas uma atualização do ranking.")
+                    loadLeaderboard()
+                }
+            }
+        }
+        connectivityObserver?.startListening()
+
         viewModelScope.launch {
             repository.ensureInitialized()
             leaderboardRepository.ensureAuthenticated()
 
+            val isOnline = ConnectivityObserver(context) {}.isNetworkAvailable()
             val player = repository.playerFlow.firstOrNull()
+            val stats = repository.statisticsFlow.firstOrNull()
+
+            Log.d("MemoryQuestLeaderboardEnsure", "MainViewModel init: Estado da conexão online=$isOnline")
+
+            if (player != null && player.usernameStatus == UsernameStatus.CONFIRMED.name) {
+                if (isOnline) {
+                    val result = leaderboardRepository.ensureLeaderboardExists(player, stats)
+                    if (result.isFailure) {
+                        Log.w("MemoryQuestLeaderboardEnsure", "Falha ao verificar leaderboard na abertura online. Agendando EnsureLeaderboardWorker.")
+                        EnsureLeaderboardWorker.schedule(context)
+                    }
+                } else {
+                    Log.d("MemoryQuestLeaderboardEnsure", "App aberto offline. Agendando EnsureLeaderboardWorker.")
+                    EnsureLeaderboardWorker.schedule(context)
+                }
+            }
+
             if (player?.usernameStatus == UsernameStatus.PENDING_VALIDATION.name) {
-                val context = getApplication<Application>()
-                val isOnline = ConnectivityObserver(context) {}.isNetworkAvailable()
                 if (isOnline) {
                     Log.d("MemoryQuestUsername", "App aberto com status PENDING_VALIDATION e conexão online: executando validação e agendando Worker")
                     usernameRepository.validatePendingUsernameOnline()
@@ -134,7 +182,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             playerState.collect { player ->
                 if (player?.usernameStatus == UsernameStatus.PENDING_VALIDATION.name) {
-                    val context = getApplication<Application>()
                     ValidatePendingUsernameWorker.schedule(context)
                     val isOnline = ConnectivityObserver(context) {}.isNetworkAvailable()
                     if (isOnline) {
@@ -146,35 +193,139 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun syncLeaderboard() {
+        val context = getApplication<Application>()
+        val online = ConnectivityObserver(context) {}.isNetworkAvailable()
+        if (!online) {
+            Log.d("MemoryQuestRanking", "Dispositivo offline. Pulo na sincronização remota do ranking.")
+            return
+        }
         viewModelScope.launch {
             usernameRepository.validatePendingUsernameOnline()
             val player = playerState.value ?: repository.playerFlow.firstOrNull()
             val stats = statsState.value ?: repository.statisticsFlow.firstOrNull()
             if (player != null) {
+                if (player.usernameStatus == UsernameStatus.CONFIRMED.name) {
+                    leaderboardRepository.ensureLeaderboardExists(player, stats)
+                }
                 leaderboardRepository.syncLeaderboard(player, stats)
             }
         }
     }
 
     fun loadLeaderboard() {
-        viewModelScope.launch {
+        val context = getApplication<Application>()
+        val online = ConnectivityObserver(context) {}.isNetworkAvailable()
+        _isOnline.value = online
+
+        Log.d("MemoryQuestRanking", "Estado da conexão: isOnline=$online")
+
+        if (!online) {
+            wasOffline = true
+            _isLeaderboardLoading.value = false
+            _leaderboardError.value = "Sem conexão com a internet"
+
+            Log.d("MemoryQuestRanking", "Início da consulta do ranking")
+            Log.d("MemoryQuestRanking", "Origem: CACHE")
+
+            leaderboardFetchJob?.cancel()
+
+            viewModelScope.launch {
+                try {
+                    val cacheResult = leaderboardRepository.fetchTop100Leaderboard(Source.CACHE)
+                    cacheResult.onSuccess { cachedList ->
+                        if (cachedList.isNotEmpty()) {
+                            _leaderboardList.value = cachedList
+                            Log.d("MemoryQuestRanking", "Sucesso: ${cachedList.size} jogadores carregados do CACHE")
+                        } else {
+                            Log.d("MemoryQuestRanking", "CACHE local vazio. Mantendo ${_leaderboardList.value.size} itens em memória")
+                        }
+                    }.onFailure { err ->
+                        Log.e("MemoryQuestRanking", "Erro ao buscar CACHE local: ${err.message}")
+                    }
+                } catch (e: Exception) {
+                    Log.e("MemoryQuestRanking", "Exceção ao buscar CACHE: ${e.message}")
+                } finally {
+                    _isLeaderboardLoading.value = false
+                    Log.d("MemoryQuestRanking", "Loading encerrado")
+                }
+            }
+            return
+        }
+
+        if (leaderboardFetchJob?.isActive == true) {
+            Log.d("MemoryQuestRanking", "Cancelando consulta anterior ainda em andamento...")
+            leaderboardFetchJob?.cancel()
+        }
+
+        leaderboardFetchJob = viewModelScope.launch {
             _isLeaderboardLoading.value = true
             _leaderboardError.value = null
 
-            usernameRepository.validatePendingUsernameOnline()
-            val player = playerState.value ?: repository.playerFlow.firstOrNull()
-            val stats = statsState.value ?: repository.statisticsFlow.firstOrNull()
-            if (player != null) {
-                leaderboardRepository.syncLeaderboard(player, stats)
-            }
+            Log.d("MemoryQuestRanking", "Início da consulta do ranking")
+            Log.d("MemoryQuestRanking", "Origem: SERVER")
 
-            val result = leaderboardRepository.fetchTop100Leaderboard()
-            result.onSuccess { list ->
-                _leaderboardList.value = list
+            try {
+                val result = withTimeoutOrNull(8000L) {
+                    val player = playerState.value ?: repository.playerFlow.firstOrNull()
+                    val stats = statsState.value ?: repository.statisticsFlow.firstOrNull()
+                    if (player != null && player.usernameStatus == UsernameStatus.CONFIRMED.name) {
+                        try {
+                            leaderboardRepository.syncLeaderboard(player, stats)
+                        } catch (e: Exception) {
+                            Log.w("MemoryQuestRanking", "Aviso na sincronização: ${e.message}")
+                        }
+                    }
+                    leaderboardRepository.fetchTop100Leaderboard(Source.SERVER)
+                }
+
+                if (result == null) {
+                    Log.w("MemoryQuestRanking", "Timeout atingido (max 8s)")
+                    _leaderboardError.value = "Tempo limite excedido. Exibindo dados locais."
+
+                    try {
+                        Log.d("MemoryQuestRanking", "Início da consulta do ranking")
+                        Log.d("MemoryQuestRanking", "Origem: CACHE")
+                        val cacheResult = leaderboardRepository.fetchTop100Leaderboard(Source.CACHE)
+                        cacheResult.onSuccess { cachedList ->
+                            if (cachedList.isNotEmpty()) {
+                                _leaderboardList.value = cachedList
+                                Log.d("MemoryQuestRanking", "Sucesso: ${cachedList.size} jogadores do CACHE pós-timeout")
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e("MemoryQuestRanking", "Erro no fallback de CACHE: ${e.message}")
+                    }
+                } else {
+                    result.onSuccess { list ->
+                        _leaderboardList.value = list
+                        _lastLeaderboardFetchTime.value = System.currentTimeMillis()
+                        _leaderboardError.value = null
+                        Log.d("MemoryQuestRanking", "Sucesso: ${list.size} jogadores carregados do SERVER")
+                    }.onFailure { err ->
+                        Log.e("MemoryQuestRanking", "Erro na consulta SERVER: ${err.message}")
+                        _leaderboardError.value = err.message ?: "Erro ao conectar ao servidor"
+
+                        try {
+                            Log.d("MemoryQuestRanking", "Início da consulta do ranking")
+                            Log.d("MemoryQuestRanking", "Origem: CACHE")
+                            val cacheResult = leaderboardRepository.fetchTop100Leaderboard(Source.CACHE)
+                            cacheResult.onSuccess { cachedList ->
+                                if (cachedList.isNotEmpty()) {
+                                    _leaderboardList.value = cachedList
+                                    Log.d("MemoryQuestRanking", "Sucesso: ${cachedList.size} jogadores do CACHE pós-erro")
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.e("MemoryQuestRanking", "Erro no fallback de CACHE: ${e.message}")
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("MemoryQuestRanking", "Erro na corrotina: ${e.message}")
+                _leaderboardError.value = e.message ?: "Erro inesperado"
+            } finally {
                 _isLeaderboardLoading.value = false
-            }.onFailure { err ->
-                _leaderboardError.value = err.message ?: "Conexão offline. Exibindo dados locais."
-                _isLeaderboardLoading.value = false
+                Log.d("MemoryQuestRanking", "Loading encerrado")
             }
         }
     }
@@ -281,7 +432,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun selectTheme(themeId: String) {
         viewModelScope.launch {
             repository.updateEquippedTheme(themeId)
-            audioManager.playSfx(SoundEffect.BUTTON_CLICK)
+            audioManager.playButton()
         }
     }
 
@@ -290,9 +441,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val player = playerState.value ?: return@launch
             if (player.coins >= theme.priceCoins) {
                 repository.unlockTheme(theme.id, theme.priceCoins)
-                audioManager.playSfx(SoundEffect.PURCHASE_SUCCESS)
+                audioManager.playCoin()
             } else {
-                audioManager.playSfx(SoundEffect.MATCH_ERROR)
+                audioManager.playMismatch()
             }
         }
     }
@@ -303,9 +454,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (player.coins >= frameItem.price) {
                 repository.addCoins(-frameItem.price)
                 repository.updateEquippedFrame(frameItem.id)
-                audioManager.playSfx(SoundEffect.PURCHASE_SUCCESS)
+                audioManager.playCoin()
             } else {
-                audioManager.playSfx(SoundEffect.MATCH_ERROR)
+                audioManager.playMismatch()
             }
         }
     }
@@ -320,9 +471,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     "booster_hint" -> repository.addHints(3)
                     else -> {}
                 }
-                audioManager.playSfx(SoundEffect.PURCHASE_SUCCESS)
+                audioManager.playCoin()
             } else {
-                audioManager.playSfx(SoundEffect.MATCH_ERROR)
+                audioManager.playMismatch()
             }
         }
     }
@@ -357,5 +508,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun resetSettings() {
         viewModelScope.launch { repository.resetDataStore() }
+    }
+
+    fun resetGameProgress() {
+        viewModelScope.launch { repository.resetGameProgress() }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        connectivityObserver?.stopListening()
     }
 }

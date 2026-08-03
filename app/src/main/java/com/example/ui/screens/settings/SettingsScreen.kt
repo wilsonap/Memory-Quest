@@ -3,8 +3,8 @@ package com.example.ui.screens.settings
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,20 +22,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.CloudDownload
-import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Help
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -58,21 +57,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.launch
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.BuildConfig
 import com.example.R
 import com.example.data.local.entity.PlayerEntity
-import com.example.ui.components.NameEntryDialog
 import com.example.ui.components.TopGameBar
-
-import com.example.data.model.UsernameUiState
-import com.example.data.repository.UsernameReservationResult
 
 @Composable
 fun SettingsScreen(
@@ -84,9 +78,6 @@ fun SettingsScreen(
     sfxVolume: Float = 0.8f,
     language: String,
     darkMode: String,
-    usernameUiState: UsernameUiState = UsernameUiState(),
-    onNameInputChange: (String, Boolean) -> Unit = { _, _ -> },
-    onReserveUsername: (String, (UsernameReservationResult) -> Unit) -> Unit = { _, _ -> },
     onSetSound: (Boolean) -> Unit,
     onSetMusic: (Boolean) -> Unit,
     onSetVibration: (Boolean) -> Unit,
@@ -94,32 +85,57 @@ fun SettingsScreen(
     onSetSfxVolume: (Float) -> Unit = {},
     onSetLanguage: (String) -> Unit,
     onSetDarkMode: (String) -> Unit,
-    onEditName: (String) -> Unit,
     onResetDefaults: () -> Unit,
-    onGoToRanking: () -> Unit = {},
+    onResetGameProgress: () -> Unit = {},
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var showNameDialog by remember { mutableStateOf(false) }
+    var showResetConfirmDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
-    val clipboardManager = LocalClipboardManager.current
 
-    if (showNameDialog) {
-        NameEntryDialog(
-            initialName = player?.name ?: "",
-            title = stringResource(R.string.settings_edit_name_title),
-            subtitle = stringResource(R.string.settings_edit_name_subtitle),
-            uiState = usernameUiState,
-            onNameInputChange = onNameInputChange,
-            onConfirm = { name ->
-                onReserveUsername(name) { result ->
-                    if (result is UsernameReservationResult.Success || result is UsernameReservationResult.PendingOffline) {
-                        showNameDialog = false
-                    }
+    if (showResetConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetConfirmDialog = false },
+            title = {
+                Text(
+                    text = "Reiniciar Jogo?",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                )
+            },
+            text = {
+                Text(
+                    text = "Deseja realmente reiniciar o jogo do início? Sua fase atual (retornará à Fase 1), moedas e estatísticas serão reiniciadas.",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showResetConfirmDialog = false
+                        onResetGameProgress()
+                        Toast.makeText(context, "Jogo reiniciado do início!", Toast.LENGTH_SHORT).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Sim, Reiniciar", color = MaterialTheme.colorScheme.onError, fontWeight = FontWeight.Bold)
                 }
             },
-            onDismiss = { showNameDialog = false }
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showResetConfirmDialog = false }
+                ) {
+                    Text("Cancelar")
+                }
+            },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
         )
     }
 
@@ -149,56 +165,7 @@ fun SettingsScreen(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // 1. Profile Card
-                Surface(
-                    color = MaterialTheme.colorScheme.surface,
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Person,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(28.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text(
-                                    text = stringResource(R.string.settings_player_name),
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                )
-                                Text(
-                                    text = player?.name?.ifEmpty { "Jogador" } ?: "Jogador",
-                                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.primary)
-                                )
-                            }
-                        }
-
-                        OutlinedButton(
-                            onClick = { showNameDialog = true },
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Icon(imageVector = Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(stringResource(R.string.settings_edit))
-                        }
-                    }
-                }
-
-                // 2. Audio & Effects Preferences
+                // 1. PREFERÊNCIAS DE ÁUDIO E EFEITOS
                 Surface(
                     color = MaterialTheme.colorScheme.surface,
                     shape = RoundedCornerShape(16.dp),
@@ -215,6 +182,7 @@ fun SettingsScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
+                        // Efeitos Sonoros Toggle
                         SettingToggleRow(
                             title = stringResource(R.string.settings_sfx),
                             icon = Icons.Default.VolumeUp,
@@ -252,6 +220,7 @@ fun SettingsScreen(
 
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
 
+                        // Música de Fundo Toggle
                         SettingToggleRow(
                             title = stringResource(R.string.settings_music),
                             icon = Icons.Default.MusicNote,
@@ -289,16 +258,47 @@ fun SettingsScreen(
 
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
 
+                        // Vibração
                         SettingToggleRow(
                             title = stringResource(R.string.settings_vibration),
                             icon = Icons.Default.Vibration,
                             checked = vibrationEnabled,
                             onCheckedChange = onSetVibration
                         )
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+
+                        // Botão Testar Efeitos Sonoros
+                        val scope = androidx.compose.runtime.rememberCoroutineScope()
+                        OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    com.example.audio.GameAudioManager.getInstance(context).testEffectsSequence()
+                                }
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f),
+                                contentColor = MaterialTheme.colorScheme.tertiary
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.VolumeUp,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Testar Efeitos (Sequência SFX)",
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                            )
+                        }
                     }
                 }
 
-                // 3. Visual & Language
+                // 2. VISUAL E IDIOMA
                 Surface(
                     color = MaterialTheme.colorScheme.surface,
                     shape = RoundedCornerShape(16.dp),
@@ -315,7 +315,7 @@ fun SettingsScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // Language Toggle
+                        // Idioma Toggle (Português / Inglês)
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -338,7 +338,7 @@ fun SettingsScreen(
                                         containerColor = if (isPtSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
                                         contentColor = if (isPtSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                                     )
-                                ) { Text("PT-BR") }
+                                ) { Text("Português") }
 
                                 OutlinedButton(
                                     onClick = { onSetLanguage("EN") },
@@ -347,13 +347,13 @@ fun SettingsScreen(
                                         containerColor = if (isEnSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
                                         contentColor = if (isEnSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                                     )
-                                ) { Text("EN") }
+                                ) { Text("English") }
                             }
                         }
 
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
 
-                        // Theme Toggle (Light / Dark / System)
+                        // Tema Toggle (Claro / Escuro / Sistema)
                         Column(modifier = Modifier.fillMaxWidth()) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(imageVector = Icons.Default.DarkMode, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
@@ -405,13 +405,24 @@ fun SettingsScreen(
                     }
                 }
 
-                // 4. Links & Navigation Card (Privacy, Support, Ranking)
+                // 3. INFORMAÇÕES E SUPORTE
                 Surface(
                     color = MaterialTheme.colorScheme.surface,
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "Informações e Suporte",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Política de Privacidade
                         NavigationLinkRow(
                             icon = Icons.Default.PrivacyTip,
                             title = stringResource(R.string.settings_privacy_policy),
@@ -420,37 +431,55 @@ fun SettingsScreen(
                                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://memory.autocheckia.com.br/privacy"))
                                     context.startActivity(intent)
                                 } catch (e: Exception) {
-                                    Toast.makeText(context, "Não foi possível abrir o link", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Política de Privacidade: Todos os seus dados são guardados localmente no seu aparelho.", Toast.LENGTH_LONG).show()
                                 }
                             }
                         )
 
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
 
+                        // Termos de Uso
+                        NavigationLinkRow(
+                            icon = Icons.Default.Description,
+                            title = "Termos de Uso",
+                            onClick = {
+                                try {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://memory.autocheckia.com.br/terms"))
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Termos de Uso: Memory Quest é um jogo educativo de memória.", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        )
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+
+                        // Suporte e Ajuda
                         NavigationLinkRow(
                             icon = Icons.Default.Help,
-                            title = stringResource(R.string.settings_support),
+                            title = "Suporte e Ajuda",
                             onClick = {
                                 try {
                                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://memory.autocheckia.com.br/support"))
                                     context.startActivity(intent)
                                 } catch (e: Exception) {
-                                    Toast.makeText(context, "Não foi possível abrir o link", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Suporte Memory Quest: wilsonap1910@gmail.com", Toast.LENGTH_LONG).show()
                                 }
                             }
                         )
 
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
 
+                        // Exclusão de dados / Reiniciar jogo
                         NavigationLinkRow(
-                            icon = Icons.Default.Leaderboard,
-                            title = stringResource(R.string.settings_ranking),
-                            onClick = onGoToRanking
+                            icon = Icons.Default.Delete,
+                            title = "Exclusão e Reinício de Dados",
+                            onClick = { showResetConfirmDialog = true }
                         )
                     }
                 }
 
-                // 6. About Card
+                // 4. SOBRE O APLICATIVO
                 Surface(
                     color = MaterialTheme.colorScheme.surface,
                     shape = RoundedCornerShape(16.dp),
@@ -478,7 +507,7 @@ fun SettingsScreen(
                                 )
                             )
                             Text(
-                                text = stringResource(R.string.settings_developer),
+                                text = stringResource(R.string.settings_developer) + " • v1.0.0",
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                                 )
@@ -487,62 +516,29 @@ fun SettingsScreen(
                     }
                 }
 
-                // 7. Backup & Security
-                Surface(
-                    color = MaterialTheme.colorScheme.surface,
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = stringResource(R.string.settings_backup_title),
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = stringResource(R.string.settings_backup_desc),
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                            )
-                        )
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Button(
-                                onClick = {
-                                    val backupJson = """{"player": "${player?.name}", "level": ${player?.currentLevel}, "coins": ${player?.coins}}"""
-                                    clipboardManager.setText(AnnotatedString(backupJson))
-                                    Toast.makeText(context, "Backup copiado para a área de transferência!", Toast.LENGTH_SHORT).show()
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(imageVector = Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(stringResource(R.string.settings_export_json))
-                            }
-                        }
-                    }
-                }
-
-                // 8. Reset Defaults
+                // 5. RESTAURAR CONFIGURAÇÕES PADRÃO
                 OutlinedButton(
                     onClick = onResetDefaults,
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        contentColor = MaterialTheme.colorScheme.primary
+                    ),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(imageVector = Icons.Default.Refresh, contentDescription = null)
+                    Icon(imageVector = Icons.Default.Refresh, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text(stringResource(R.string.settings_reset_defaults))
+                    Text(
+                        text = stringResource(R.string.settings_reset_defaults),
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    )
                 }
+
+                Spacer(modifier = Modifier.height(48.dp))
             }
         }
     }

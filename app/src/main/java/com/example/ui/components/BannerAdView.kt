@@ -20,38 +20,53 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.example.config.AdConfig
-import com.google.android.gms.ads.AdListener
-import com.google.android.gms.ads.AdRequest
+import com.example.BuildConfig
+import com.example.config.AdMobConfig
+import com.example.config.BannerManager
+import com.example.sync.ConnectivityObserver
 import com.google.android.gms.ads.AdSize
-import com.google.android.gms.ads.AdView
-import com.google.android.gms.ads.LoadAdError
 
-private const val TAG = "MemoryQuestAds"
+private const val TAG = "BannerAdView"
 
 @Composable
 fun BannerAdView(
     isAdsRemoved: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    val adUnitId = AdConfig.currentBannerId
+    val adUnitId = AdMobConfig.bannerId
 
-    if (isAdsRemoved || !AdConfig.ADS_ENABLED || adUnitId.isBlank()) {
+    if (isAdsRemoved || !AdMobConfig.ADS_ENABLED || adUnitId.isBlank()) {
         return
     }
 
     val context = LocalContext.current
     var isAdLoaded by remember { mutableStateOf(false) }
-    var isAdFailed by remember { mutableStateOf(false) }
-    var adViewRef by remember { mutableStateOf<AdView?>(null) }
+    var bannerManagerRef by remember { mutableStateOf<BannerManager?>(null) }
 
     val adaptiveAdSize = remember(context) { getAdaptiveAdSize(context) }
+
+    // Automatic retry on internet reconnection
+    DisposableEffect(context) {
+        val observer = ConnectivityObserver(context) {
+            if (!isAdLoaded) {
+                if (BuildConfig.DEBUG) {
+                    Log.d(TAG, "[DEBUG LOG] Conexão restabelecida. Recarregando banner AdMob...")
+                }
+                bannerManagerRef?.loadAd()
+            }
+        }
+        observer.startListening()
+
+        onDispose {
+            observer.stopListening()
+        }
+    }
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .then(
-                if (isAdLoaded && !isAdFailed) {
+                if (isAdLoaded) {
                     Modifier
                         .wrapContentHeight()
                         .padding(vertical = 4.dp)
@@ -63,64 +78,24 @@ fun BannerAdView(
     ) {
         AndroidView(
             factory = { ctx ->
-                AdView(ctx).apply {
-                    setAdSize(adaptiveAdSize)
-                    this.adUnitId = adUnitId
-                    adListener = object : AdListener() {
-                        override fun onAdLoaded() {
-                            isAdLoaded = true
-                            isAdFailed = false
-                            Log.d(TAG, "onAdLoaded - Banner ($adUnitId) carregado com sucesso.")
-                        }
-
-                        override fun onAdFailedToLoad(loadAdError: LoadAdError) {
-                            isAdLoaded = false
-                            isAdFailed = true
-                            Log.w(
-                                TAG,
-                                "onAdFailedToLoad - Code: ${loadAdError.code}, " +
-                                "Domain: ${loadAdError.domain}, " +
-                                "Message: ${loadAdError.message}, " +
-                                "ResponseInfo: ${loadAdError.responseInfo}, " +
-                                "Cause: ${loadAdError.cause}"
-                            )
-                        }
-
-                        override fun onAdOpened() {
-                            Log.d(TAG, "onAdOpened")
-                        }
-
-                        override fun onAdClosed() {
-                            Log.d(TAG, "onAdClosed")
-                        }
-
-                        override fun onAdImpression() {
-                            Log.d(TAG, "onAdImpression")
-                        }
+                val manager = BannerManager(
+                    context = ctx,
+                    adUnitId = adUnitId,
+                    onAdLoadedStateChange = { loaded ->
+                        isAdLoaded = loaded
                     }
-
-                    try {
-                        loadAd(AdRequest.Builder().build())
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Exceção ao carregar AdMob banner", e)
-                        isAdFailed = true
-                    }
-
-                    adViewRef = this
-                }
+                )
+                bannerManagerRef = manager
+                manager.createAdView(adaptiveAdSize)
             },
-            update = { /* sem recarregamentos em recomposições */ }
+            update = { /* sem recomposições desnecessárias */ }
         )
     }
 
     DisposableEffect(adUnitId) {
         onDispose {
-            try {
-                adViewRef?.destroy()
-            } catch (e: Exception) {
-                Log.w(TAG, "Erro ao destruir AdView: ${e.message}")
-            }
-            adViewRef = null
+            bannerManagerRef?.destroy()
+            bannerManagerRef = null
         }
     }
 }
@@ -139,8 +114,9 @@ private fun getAdaptiveAdSize(context: Context): AdSize {
         val adWidth = (adWidthPixels / density).toInt()
         AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(context, adWidth)
     } catch (e: Exception) {
-        Log.w(TAG, "Falha ao calcular tamanho adaptativo de anúncio, usando BANNER padrão", e)
+        if (BuildConfig.DEBUG) {
+            Log.w(TAG, "[DEBUG LOG] Falha ao calcular tamanho adaptativo, usando BANNER padrão", e)
+        }
         AdSize.BANNER
     }
 }
-

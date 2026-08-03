@@ -16,6 +16,8 @@ class GameRepository(
 ) {
     val playerFlow: Flow<PlayerEntity?> = dao.getPlayerFlow()
     val statisticsFlow: Flow<StatisticsEntity?> = dao.getStatisticsFlow()
+
+    suspend fun getStatistics(): StatisticsEntity? = dao.getStatistics()
     val unlockedThemesFlow: Flow<List<UnlockedThemeEntity>> = dao.getUnlockedThemesFlow()
     val achievementsFlow: Flow<List<AchievementEntity>> = dao.getAchievementsFlow()
 
@@ -127,7 +129,7 @@ class GameRepository(
         coinsEarnedInGame: Int,
         maxStreakInGame: Int,
         totalFlipsInGame: Int
-    ) {
+    ): List<AchievementEntity> {
         val currentStats = dao.getStatistics() ?: StatisticsEntity()
         val currentPlayer = dao.getPlayer() ?: PlayerEntity()
 
@@ -156,17 +158,19 @@ class GameRepository(
         )
         dao.insertOrUpdateStatistics(updatedStats)
 
+        val unlockedList = mutableListOf<AchievementEntity>()
+
         // Award coins & level progression
         if (won) {
             val nextLevel = currentPlayer.currentLevel + 1
             dao.updatePlayerLevel(nextLevel)
             dao.addCoins(coinsEarnedInGame)
 
-            checkAndIncrementAchievement("ach_first_win", 1)
-            checkAndIncrementAchievement("ach_10_levels", nextLevel)
-            checkAndIncrementAchievement("ach_50_levels", nextLevel)
+            checkAndIncrementAchievement("ach_first_win", 1)?.let { unlockedList.add(it) }
+            checkAndIncrementAchievement("ach_10_levels", nextLevel)?.let { unlockedList.add(it) }
+            checkAndIncrementAchievement("ach_50_levels", nextLevel)?.let { unlockedList.add(it) }
             if (flawless) {
-                checkAndIncrementAchievement("ach_flawless", 1)
+                checkAndIncrementAchievement("ach_flawless", 1)?.let { unlockedList.add(it) }
             }
         } else {
             if (coinsEarnedInGame > 0) {
@@ -175,18 +179,20 @@ class GameRepository(
         }
 
         if (pairsFoundInGame > 0) {
-            checkAndIncrementAchievement("ach_first_pair", 1)
-            checkAndIncrementAchievement("ach_100_pairs", newTotalPairs)
+            checkAndIncrementAchievement("ach_first_pair", 1)?.let { unlockedList.add(it) }
+            checkAndIncrementAchievement("ach_100_pairs", newTotalPairs)?.let { unlockedList.add(it) }
         }
 
         if (maxStreakInGame >= 5) {
-            checkAndIncrementAchievement("ach_streak_5", maxStreakInGame)
+            checkAndIncrementAchievement("ach_streak_5", maxStreakInGame)?.let { unlockedList.add(it) }
         }
+
+        return unlockedList
     }
 
-    private suspend fun checkAndIncrementAchievement(achievementId: String, currentProgressValue: Int) {
+    private suspend fun checkAndIncrementAchievement(achievementId: String, currentProgressValue: Int): AchievementEntity? {
         val achievements = dao.getAchievements()
-        val ach = achievements.find { it.achievementId == achievementId } ?: return
+        val ach = achievements.find { it.achievementId == achievementId } ?: return null
         if (!ach.isUnlocked) {
             val newProgress = maxOf(ach.currentProgress, currentProgressValue)
             if (newProgress >= ach.maxProgress) {
@@ -197,10 +203,12 @@ class GameRepository(
                 )
                 dao.updateAchievement(unlocked)
                 dao.addCoins(ach.rewardCoins)
+                return unlocked
             } else {
                 dao.updateAchievement(ach.copy(currentProgress = newProgress))
             }
         }
+        return null
     }
 
     // Sound / Music / Vibration settings
@@ -228,5 +236,35 @@ class GameRepository(
 
     suspend fun addExtraLives(amount: Int) {
         dao.addExtraLives(amount)
+    }
+
+    suspend fun resetGameProgress() {
+        val player = dao.getPlayer()
+        if (player != null) {
+            val resetPlayer = player.copy(
+                coins = 100,
+                currentLevel = 1,
+                highestLevel = 1,
+                remainingHints = 3,
+                extraLives = 2
+            )
+            dao.insertOrUpdatePlayer(resetPlayer)
+
+            val initialStats = StatisticsEntity(
+                id = 1,
+                totalGames = 0,
+                wins = 0,
+                losses = 0,
+                totalTimeSeconds = 0,
+                highestStreak = 0,
+                totalPairsFound = 0,
+                consecutiveDays = 1,
+                totalFlawlessWins = 0,
+                totalCoinsEarned = 100,
+                totalFlips = 0,
+                correctFlips = 0
+            )
+            dao.insertOrUpdateStatistics(initialStats)
+        }
     }
 }

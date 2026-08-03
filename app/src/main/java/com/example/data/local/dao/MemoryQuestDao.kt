@@ -40,6 +40,9 @@ interface MemoryQuestDao {
     @Query("UPDATE player SET equippedFrameId = :frameId WHERE id = 1")
     suspend fun updateEquippedFrame(frameId: String)
 
+    @Query("UPDATE player SET avatarType = :avatarType, avatarPresetId = :presetId, avatarLocalPath = :localPath, avatarUpdatedAt = :updatedAt WHERE id = 1")
+    suspend fun updatePlayerAvatar(avatarType: String, presetId: String, localPath: String, updatedAt: Long = System.currentTimeMillis())
+
     @Query("UPDATE player SET remainingHints = remainingHints + :amount WHERE id = 1")
     suspend fun addHints(amount: Int)
 

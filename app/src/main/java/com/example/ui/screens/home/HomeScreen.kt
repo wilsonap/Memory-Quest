@@ -1,5 +1,8 @@
 package com.example.ui.screens.home
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,13 +23,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.EmojiEvents
-import androidx.compose.material.icons.filled.MonetizationOn
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ShoppingBag
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -34,6 +35,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,19 +44,23 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.res.stringResource
 import com.example.R
+import com.example.avatar.model.AvatarType
+import com.example.avatar.ui.AvatarImage
 import com.example.data.local.entity.PlayerEntity
 import com.example.ui.components.BannerAdView
 import com.example.ui.components.SparkleParticleOverlay
+import com.example.ui.screens.profile.model.PlayerTitle
+import com.example.ui.screens.profile.util.XPCalculator
 import com.example.ui.theme.ImmersiveBg
 import com.example.ui.theme.ImmersiveGold
-import com.example.ui.theme.ImmersiveGreen
 import com.example.ui.theme.ImmersivePrimary
 import com.example.ui.theme.ImmersivePrimaryContainer
 import com.example.ui.theme.ImmersiveSecondary
@@ -66,21 +73,34 @@ import com.example.ui.theme.ImmersiveTextSecondary
 fun HomeScreen(
     player: PlayerEntity?,
     onPlayClick: () -> Unit,
+    onProfileClick: () -> Unit = {},
     onRankingClick: () -> Unit,
     onShopClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onStatsClick: () -> Unit,
     onAchievementsClick: () -> Unit,
-    onEditNameClick: () -> Unit,
     isAdsRemoved: Boolean = false,
     modifier: Modifier = Modifier
 ) {
+    val playerName = player?.name?.ifEmpty { "Alessandro" } ?: "Alessandro"
+    val level = (player?.highestLevel ?: 1).coerceAtLeast(1)
+    val playerTitle = PlayerTitle.getTitleForLevel(level)
+
+    val xpInfo = remember(player) {
+        XPCalculator.calculateXp(player, null)
+    }
+
+    val animatedProgress by animateFloatAsState(
+        targetValue = xpInfo.progress,
+        animationSpec = tween(durationMillis = 800, easing = FastOutSlowInEasing),
+        label = "home_xp_anim"
+    )
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(ImmersiveBg)
     ) {
-        // Subtle particle sparkle overlay
         SparkleParticleOverlay()
 
         Column(
@@ -91,13 +111,15 @@ fun HomeScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Header Player Profile Card
+            // Header Player Profile Card (Tapping anywhere opens PROFILE)
             Surface(
                 color = ImmersiveSurface,
-                shape = RoundedCornerShape(28.dp),
+                shape = RoundedCornerShape(24.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, ImmersiveSurfaceVariant, RoundedCornerShape(28.dp))
+                    .testTag("home_profile_card")
+                    .border(1.dp, ImmersiveSurfaceVariant, RoundedCornerShape(24.dp))
+                    .clickable(onClick = onProfileClick)
             ) {
                 Row(
                     modifier = Modifier
@@ -108,60 +130,74 @@ fun HomeScreen(
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable { onEditNameClick() }
+                        modifier = Modifier.weight(1f)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    Brush.linearGradient(
-                                        listOf(ImmersivePrimary, ImmersivePrimaryContainer)
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = (player?.name?.firstOrNull() ?: 'A').uppercase(),
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF1D192B)
-                                )
-                            )
-                        }
+                        AvatarImage(
+                            avatarType = player?.avatarType ?: AvatarType.PRESET.name,
+                            avatarPresetId = player?.avatarPresetId ?: "avatar_01",
+                            avatarLocalPath = player?.avatarLocalPath ?: "",
+                            size = 52.dp,
+                            showEditBadge = false,
+                            onClick = onProfileClick
+                        )
 
                         Spacer(modifier = Modifier.width(12.dp))
 
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = player?.name?.ifEmpty { "Alex Quest" } ?: "Alex Quest",
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = ImmersiveTextPrimary
-                                    )
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(
-                                    imageVector = Icons.Default.Edit,
-                                    contentDescription = stringResource(R.string.home_edit_name),
-                                    tint = ImmersivePrimary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = stringResource(R.string.home_explorer_level, player?.currentLevel ?: 1),
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = ImmersiveTextSecondary,
+                                text = playerName,
+                                style = MaterialTheme.typography.titleMedium.copy(
                                     fontWeight = FontWeight.Bold,
-                                    letterSpacing = 1.sp
-                                )
+                                    color = ImmersiveTextPrimary
+                                ),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
-                            if (player?.usernameStatus == "PENDING_VALIDATION") {
+
+                            Text(
+                                text = "$playerTitle • Nível $level",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = ImmersiveGold,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 11.sp
+                                ),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            // Small XP Bar
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp))
+                                        .background(ImmersiveSurfaceVariant)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth(animatedProgress)
+                                            .height(6.dp)
+                                            .clip(RoundedCornerShape(3.dp))
+                                            .background(
+                                                Brush.horizontalGradient(
+                                                    listOf(Color(0xFFFFB703), ImmersiveGold)
+                                                )
+                                            )
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.width(8.dp))
+
                                 Text(
-                                    text = "⏳ " + stringResource(R.string.username_awaiting_confirmation),
+                                    text = "${xpInfo.currentLevelXp}/${xpInfo.requiredLevelXp} XP",
                                     style = MaterialTheme.typography.labelSmall.copy(
-                                        color = Color(0xFFFFD166),
+                                        color = ImmersiveTextSecondary,
                                         fontSize = 10.sp
                                     )
                                 )
@@ -169,27 +205,40 @@ fun HomeScreen(
                         }
                     }
 
-                    // Coins badge
-                    Row(
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .background(ImmersiveSurfaceVariant)
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "${player?.coins ?: 0}",
-                            style = MaterialTheme.typography.titleSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = ImmersiveSecondary
-                            )
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Box(
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // Coins & Arrow Indicator
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
                             modifier = Modifier
-                                .size(12.dp)
                                 .clip(CircleShape)
-                                .background(ImmersiveGold)
+                                .background(ImmersiveSurfaceVariant)
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "${player?.coins ?: 0}",
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = ImmersiveSecondary
+                                )
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .clip(CircleShape)
+                                    .background(ImmersiveGold)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = stringResource(R.string.profile_view_profile),
+                            tint = ImmersivePrimary,
+                            modifier = Modifier.size(24.dp)
                         )
                     }
                 }
@@ -220,7 +269,7 @@ fun HomeScreen(
                     modifier = Modifier.border(1.dp, ImmersivePrimary.copy(alpha = 0.3f), CircleShape)
                 ) {
                     Text(
-                        text = stringResource(R.string.home_next_challenge, player?.currentLevel ?: 1),
+                        text = stringResource(R.string.home_next_challenge, level),
                         style = MaterialTheme.typography.labelSmall.copy(
                             color = ImmersivePrimary,
                             fontWeight = FontWeight.Bold,
@@ -301,7 +350,6 @@ fun HomeScreen(
                     HomeMenuCard(
                         title = stringResource(R.string.home_shop_title),
                         subtitle = stringResource(R.string.home_shop_subtitle),
-                        icon = Icons.Default.ShoppingBag,
                         badgeEmoji = "🎁",
                         onClick = onShopClick,
                         modifier = Modifier
@@ -312,7 +360,6 @@ fun HomeScreen(
                     HomeMenuCard(
                         title = stringResource(R.string.home_ranking_title),
                         subtitle = stringResource(R.string.home_ranking_subtitle),
-                        icon = Icons.Default.EmojiEvents,
                         badgeEmoji = "🏆",
                         onClick = onRankingClick,
                         modifier = Modifier
@@ -328,7 +375,6 @@ fun HomeScreen(
                     HomeMenuCard(
                         title = stringResource(R.string.home_stats_title),
                         subtitle = stringResource(R.string.home_stats_subtitle),
-                        icon = Icons.Default.BarChart,
                         badgeEmoji = "📊",
                         onClick = onStatsClick,
                         modifier = Modifier
@@ -339,7 +385,6 @@ fun HomeScreen(
                     HomeMenuCard(
                         title = stringResource(R.string.home_config_title),
                         subtitle = stringResource(R.string.home_config_subtitle),
-                        icon = Icons.Default.Settings,
                         badgeEmoji = "⚙️",
                         onClick = onSettingsClick,
                         modifier = Modifier
@@ -377,7 +422,7 @@ fun HomeScreen(
             BannerAdView(isAdsRemoved = isAdsRemoved)
 
             Text(
-                text = "Memory Quest • Immersive UI",
+                text = stringResource(R.string.home_footer_text),
                 style = MaterialTheme.typography.labelSmall.copy(color = ImmersiveTextSecondary.copy(alpha = 0.5f))
             )
         }
@@ -388,7 +433,6 @@ fun HomeScreen(
 private fun HomeMenuCard(
     title: String,
     subtitle: String,
-    icon: ImageVector,
     badgeEmoji: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -439,4 +483,3 @@ private fun HomeMenuCard(
         }
     }
 }
-

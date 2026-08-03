@@ -10,12 +10,19 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
+import com.google.firebase.firestore.Source
 import kotlinx.coroutines.tasks.await
+
+import com.google.firebase.firestore.FirebaseFirestoreException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 data class LeaderboardPlayer(
     val uid: String = "",
     val name: String = "",
-    val avatar: String = "",
+    val avatar: String = "avatar_01",
+    val avatarType: String = "PRESET",
+    val avatarValue: String = "avatar_01",
     val totalScore: Long = 0L,
     val highestLevel: Long = 1L,
     val totalPairs: Long = 0L,
@@ -32,6 +39,119 @@ class LeaderboardRepository(
 
     companion object {
         private const val LOG_TAG = "MemoryQuestUsername"
+        private const val ENSURE_LOG_TAG = "MemoryQuestLeaderboardEnsure"
+    }
+
+    private val ensureMutex = Mutex()
+
+    /**
+     * Central function to verify and recreate leaderboard/{uid} if missing.
+     * Idempotent, thread-safe, and enforces reservation UID match & CONFIRMED status.
+     */
+    suspend fun ensureLeaderboardExists(
+        player: PlayerEntity,
+        stats: StatisticsEntity?
+    ): Result<Boolean> = ensureMutex.withLock {
+        Log.d(ENSURE_LOG_TAG, "Início da verificação de leaderboard")
+
+        val usernameStatus = player.usernameStatus
+        Log.d(ENSURE_LOG_TAG, "UsernameStatus: $usernameStatus")
+
+        if (usernameStatus != UsernameStatus.CONFIRMED.name) {
+            Log.d(ENSURE_LOG_TAG, "Username não confirmado (status='$usernameStatus'). Não criando leaderboard.")
+            return Result.success(false)
+        }
+
+        var currentUser = auth.currentUser
+        if (currentUser == null) {
+            Log.d(ENSURE_LOG_TAG, "FirebaseAuth.currentUser é null. Solicitando autenticação...")
+            val newUid = ensureAuthenticated()
+            currentUser = auth.currentUser
+            if (currentUser == null || newUid.isNullOrEmpty()) {
+                Log.e(ENSURE_LOG_TAG, "Falha na autenticação. currentUser continua null.")
+                return Result.failure(IllegalStateException("Sem autenticação disponível"))
+            }
+        }
+
+        val uid = currentUser.uid
+        Log.d(ENSURE_LOG_TAG, "UID atual: $uid")
+
+        val confirmedDisplayName = player.confirmedDisplayName.ifEmpty { player.name }.trim().ifEmpty { "Explorador" }
+        val confirmedNormalizedName = player.confirmedNormalizedName.ifEmpty { UsernameNormalizer.normalizeUsername(confirmedDisplayName) }
+        Log.d(ENSURE_LOG_TAG, "NormalizedName: $confirmedNormalizedName")
+
+        if (confirmedNormalizedName.isEmpty()) {
+            Log.w(ENSURE_LOG_TAG, "NormalizedName está vazio. Não recriando leaderboard.")
+            return Result.success(false)
+        }
+
+        try {
+            val leaderboardRef = firestore.collection("leaderboard").document(uid)
+            val leaderboardSnap = leaderboardRef.get().await()
+
+            if (leaderboardSnap.exists()) {
+                Log.d(ENSURE_LOG_TAG, "Documento leaderboard/$uid encontrado no Firestore")
+                return Result.success(true)
+            }
+
+            Log.d(ENSURE_LOG_TAG, "Documento leaderboard/$uid ausente")
+
+            val usernameRef = firestore.collection("usernames").document(confirmedNormalizedName)
+            val usernameSnap = usernameRef.get().await()
+
+            if (!usernameSnap.exists()) {
+                Log.w(ENSURE_LOG_TAG, "Documento usernames/$confirmedNormalizedName não encontrado. Reserva ausente. Não recriando leaderboard.")
+                return Result.success(false)
+            }
+
+            val reservedUid = usernameSnap.getString("uid")
+            if (reservedUid != uid) {
+                Log.e(ENSURE_LOG_TAG, "Conflito de identidade: usernames/$confirmedNormalizedName pertence ao UID '$reservedUid', mas o UID atual é '$uid'. Não recriando leaderboard.")
+                return Result.success(false)
+            }
+
+            Log.d(ENSURE_LOG_TAG, "Iniciando recriação do documento leaderboard/$uid")
+
+            val totalPairs = stats?.totalPairsFound?.toLong() ?: 0L
+            val bestStreak = stats?.highestStreak?.toLong() ?: 0L
+            val gamesCompleted = stats?.totalGames?.toLong() ?: 0L
+            val highestLevel = maxOf(1L, player.highestLevel.toLong())
+            val totalScore = (highestLevel * 1000L) + (totalPairs * 10L) + (bestStreak * 50L) + (gamesCompleted * 20L)
+            val avatarPresetVal = player.avatarPresetId.ifEmpty { "avatar_01" }
+
+            val safeName = confirmedDisplayName.trim().take(20).let {
+                if (it.length < 3) "Explorador" else it
+            }
+
+            val leaderboardData = hashMapOf(
+                "uid" to uid,
+                "name" to safeName,
+                "normalizedName" to confirmedNormalizedName,
+                "avatar" to avatarPresetVal,
+                "totalScore" to totalScore,
+                "highestLevel" to highestLevel,
+                "totalPairs" to totalPairs,
+                "bestStreak" to bestStreak,
+                "gamesCompleted" to gamesCompleted,
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+
+            Log.d(ENSURE_LOG_TAG, "Campos enviados para leaderboard/$uid: $leaderboardData")
+
+            leaderboardRef.set(leaderboardData, SetOptions.merge()).await()
+            Log.d(ENSURE_LOG_TAG, "Recriação do documento leaderboard/$uid concluída com sucesso")
+
+            Result.success(true)
+        } catch (e: FirebaseFirestoreException) {
+            Log.e(ENSURE_LOG_TAG, "Erro no Firestore ao verificar/recriar leaderboard: código=[${e.code}] mensagem=${e.message}", e)
+            if (e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                Log.e(ENSURE_LOG_TAG, "PERMISSION_DENIED ao tentar acessar ou recriar leaderboard/$uid")
+            }
+            Result.failure(e)
+        } catch (e: Exception) {
+            Log.e(ENSURE_LOG_TAG, "Erro no Firestore: ${e.message}", e)
+            Result.failure(e)
+        }
     }
 
     /**
@@ -84,11 +204,16 @@ class LeaderboardRepository(
             val displayName = player.confirmedDisplayName.ifEmpty { player.name }.trim().ifEmpty { "Explorador" }
             val normalizedName = UsernameNormalizer.normalizeUsername(displayName)
 
+            val avatarPresetVal = player.avatarPresetId.ifEmpty { "avatar_01" }
+            val onlineAvatarType = if (player.avatarType == "CUSTOM") "PRESET" else player.avatarType
+
             val leaderboardData = hashMapOf(
                 "uid" to uid,
                 "name" to displayName,
                 "normalizedName" to normalizedName,
-                "avatar" to player.equippedFrameId,
+                "avatar" to avatarPresetVal,
+                "avatarType" to onlineAvatarType,
+                "avatarValue" to avatarPresetVal,
                 "totalScore" to totalScore,
                 "highestLevel" to highestLevel,
                 "totalPairs" to totalPairs,
@@ -114,20 +239,28 @@ class LeaderboardRepository(
 
     /**
      * Fetches top 100 players ordered by totalScore descending from Firestore.
+     * Applies deduplication by UID and strict tie-breaker sorting:
+     * 1. totalScore (descending)
+     * 2. highestLevel (descending)
+     * 3. totalPairs (descending)
+     * 4. uid (ascending)
      */
-    suspend fun fetchTop100Leaderboard(): Result<List<LeaderboardPlayer>> {
+    suspend fun fetchTop100Leaderboard(
+        source: Source = Source.DEFAULT
+    ): Result<List<LeaderboardPlayer>> {
         return try {
-            val currentUid = ensureAuthenticated()
+            val currentUid = getCurrentUserId() ?: ensureAuthenticated()
             val querySnapshot = firestore.collection("leaderboard")
                 .orderBy("totalScore", Query.Direction.DESCENDING)
                 .limit(100)
-                .get()
+                .get(source)
                 .await()
 
-            val list = querySnapshot.documents.mapIndexed { index, doc ->
+            val rawList = querySnapshot.documents.map { doc ->
                 val uid = doc.getString("uid") ?: doc.id
                 val name = doc.getString("name") ?: "Explorador"
-                val avatar = doc.getString("avatar") ?: "classic"
+                val avatarType = doc.getString("avatarType") ?: "PRESET"
+                val avatarValue = doc.getString("avatarValue") ?: doc.getString("avatar") ?: "avatar_01"
                 val totalScore = doc.getLong("totalScore") ?: 0L
                 val highestLevel = doc.getLong("highestLevel") ?: 1L
                 val totalPairs = doc.getLong("totalPairs") ?: 0L
@@ -137,18 +270,36 @@ class LeaderboardRepository(
                 LeaderboardPlayer(
                     uid = uid,
                     name = name,
-                    avatar = avatar,
+                    avatar = avatarValue,
+                    avatarType = avatarType,
+                    avatarValue = avatarValue,
                     totalScore = totalScore,
                     highestLevel = highestLevel,
                     totalPairs = totalPairs,
                     bestStreak = bestStreak,
                     gamesCompleted = gamesCompleted,
-                    rank = index + 1,
+                    rank = 0,
                     isCurrentUser = (currentUid != null && uid == currentUid)
                 )
             }
 
-            Result.success(list)
+            // Remove duplicates by UID
+            val distinctList = rawList.distinctBy { it.uid }
+
+            // Sort with tie-breakers: totalScore DESC, highestLevel DESC, totalPairs DESC, uid ASC
+            val sortedList = distinctList.sortedWith(
+                compareByDescending<LeaderboardPlayer> { it.totalScore }
+                    .thenByDescending { it.highestLevel }
+                    .thenByDescending { it.totalPairs }
+                    .thenBy { it.uid }
+            )
+
+            // Assign sequential rank numbers
+            val rankedList = sortedList.mapIndexed { index, player ->
+                player.copy(rank = index + 1)
+            }
+
+            Result.success(rankedList)
         } catch (e: Exception) {
             e.printStackTrace()
             Result.failure(e)

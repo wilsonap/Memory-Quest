@@ -7,11 +7,17 @@ import com.example.audio.GameAudioManager
 import com.example.audio.SoundEffect
 import com.example.data.local.AppDatabase
 import com.example.data.local.DataStoreManager
+import com.example.data.local.entity.AchievementEntity
+import com.example.data.local.entity.PlayerEntity
+import com.example.data.local.entity.StatisticsEntity
+import com.example.ui.screens.profile.util.XPCalculator
 import com.example.data.model.GameCard
 import com.example.data.model.GameTheme
 import com.example.data.model.LevelConfig
 import com.example.data.repository.GameRepository
 import com.example.data.repository.LeaderboardRepository
+import com.example.data.repository.PendingSyncRepository
+import com.example.sync.GameSyncUseCase
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,7 +36,22 @@ sealed interface GameUiStatus {
         val flawlessBonus: Int,
         val comboBonus: Int,
         val timeSeconds: Long,
-        val levelCompletedNumber: Int
+        val levelCompletedNumber: Int,
+        val errorsCount: Int = 0,
+        val pairsFound: Int = 0,
+        val totalPairs: Int = 0,
+        val maxCombo: Int = 0,
+        val totalFlips: Int = 0,
+        val accuracyPercent: Int = 100,
+        val starsCount: Int = 3,
+        val xpEarned: Int = 100,
+        val oldXpProgress: Float = 0f,
+        val newXpProgress: Float = 0.5f,
+        val isLevelUp: Boolean = false,
+        val isNewRecord: Boolean = false,
+        val unlockedAchievement: AchievementEntity? = null,
+        val themeNameRes: Int = 0,
+        val themeCategory: String = "Fase"
     ) : GameUiStatus
     data class Defeat(val pairsFoundCount: Int, val levelNumber: Int) : GameUiStatus
 }
@@ -60,6 +81,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val db = AppDatabase.getDatabase(application)
     private val dataStore = DataStoreManager(application)
     val repository = GameRepository(db.memoryQuestDao(), dataStore)
+    private val pendingSyncRepository = PendingSyncRepository(db.pendingSyncDao(), db.memoryQuestDao())
+    private val gameSyncUseCase = GameSyncUseCase(pendingSyncRepository)
     private val audioManager = GameAudioManager.getInstance(application)
 
     private val _uiState = MutableStateFlow(GameState())
@@ -158,7 +181,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val updatedCards = currentState.cards.toMutableList()
         updatedCards[cardIndex] = card.copy(isFaceUp = true)
         _uiState.update { it.copy(cards = updatedCards, totalFlips = it.totalFlips + 1) }
-        audioManager.playSfx(SoundEffect.CARD_FLIP)
+        audioManager.playCardFlip()
 
         if (firstFlippedIndex == null) {
             // First card flipped
@@ -175,8 +198,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             viewModelScope.launch {
                 if (firstCard.pairId == secondCard.pairId) {
                     // MATCH!
-                    audioManager.playSfx(SoundEffect.MATCH_SUCCESS)
-                    audioManager.playSfx(SoundEffect.COIN_GAIN)
+                    audioManager.playMatch()
+                    audioManager.playCoin()
                     delay(300)
                     val newPairsFound = _uiState.value.pairsFound + 1
                     val newCombo = _uiState.value.currentCombo + 1
@@ -206,8 +229,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 } else {
                     // MISMATCH!
-                    audioManager.playSfx(SoundEffect.MATCH_ERROR)
-                    audioManager.playSfx(SoundEffect.LIFE_LOST)
+                    audioManager.playMismatch()
                     delay(800)
                     val newLives = _uiState.value.lives - 1
                     val newErrors = _uiState.value.errorsCount + 1
@@ -237,7 +259,6 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun onLevelSuccess() {
         timerJob?.cancel()
-        audioManager.playSfx(SoundEffect.LEVEL_COMPLETE)
         viewModelScope.launch {
             val state = _uiState.value
             val flawless = state.errorsCount == 0
@@ -246,20 +267,23 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             val comboBonus = state.maxCombo * 10
             val totalCoinsEarned = state.coinsEarnedInGame + levelWinBonus + flawlessBonus + comboBonus
 
-            _uiState.update {
-                it.copy(
-                    status = GameUiStatus.LevelCompleted(
-                        coinsEarned = totalCoinsEarned,
-                        flawlessBonus = flawlessBonus,
-                        comboBonus = comboBonus,
-                        timeSeconds = state.elapsedTimeSeconds,
-                        levelCompletedNumber = state.levelNumber
-                    )
-                )
+            val stars = when {
+                state.errorsCount == 0 -> 3
+                state.errorsCount <= 2 -> 2
+                else -> 1
             }
 
+            val totalFlipsCount = maxOf(state.totalFlips, state.totalPairs * 2)
+            val accuracy = if (totalFlipsCount > 0) {
+                (((state.totalPairs * 2).toFloat() / totalFlipsCount.toFloat()) * 100).toInt().coerceIn(0, 100)
+            } else 100
+
+            val statsBefore = repository.getStatistics()
+            val playerBefore = repository.playerFlow.firstOrNull()
+            val xpBefore = XPCalculator.calculateXp(playerBefore, statsBefore)
+
             // Persist to Room!
-            repository.updateStatsAfterGame(
+            val unlockedAchievements = repository.updateStatsAfterGame(
                 won = true,
                 pairsFoundInGame = state.pairsFound,
                 gameDurationSeconds = state.elapsedTimeSeconds,
@@ -269,8 +293,56 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 totalFlipsInGame = state.totalFlips
             )
 
+            val statsAfter = repository.getStatistics()
+            val playerAfter = repository.playerFlow.firstOrNull()
+            val xpAfter = XPCalculator.calculateXp(playerAfter, statsAfter)
+
+            val xpEarned = (stars * 40) + (if (flawless) 50 else 0) + (state.maxCombo * 10)
+            val isLevelUp = xpAfter.level > xpBefore.level || (playerAfter?.highestLevel ?: 1) > (playerBefore?.highestLevel ?: 1)
+            val isNewRecord = (statsBefore != null) && (
+                state.maxCombo > statsBefore.highestStreak ||
+                statsBefore.wins == 0 ||
+                state.levelNumber > (playerBefore?.highestLevel ?: 1)
+            )
+
+            val unlockedAch = unlockedAchievements.firstOrNull()
+
+            _uiState.update {
+                it.copy(
+                    status = GameUiStatus.LevelCompleted(
+                        coinsEarned = totalCoinsEarned,
+                        flawlessBonus = flawlessBonus,
+                        comboBonus = comboBonus,
+                        timeSeconds = state.elapsedTimeSeconds,
+                        levelCompletedNumber = state.levelNumber,
+                        errorsCount = state.errorsCount,
+                        pairsFound = state.pairsFound,
+                        totalPairs = state.totalPairs,
+                        maxCombo = state.maxCombo,
+                        totalFlips = state.totalFlips,
+                        accuracyPercent = accuracy,
+                        starsCount = stars,
+                        xpEarned = xpEarned,
+                        oldXpProgress = xpBefore.progress,
+                        newXpProgress = xpAfter.progress,
+                        isLevelUp = isLevelUp,
+                        isNewRecord = isNewRecord,
+                        unlockedAchievement = unlockedAch,
+                        themeNameRes = state.theme.nameRes,
+                        themeCategory = state.theme.category
+                    )
+                )
+            }
+
             // Queue pending sync record in Room & trigger WorkManager
-            com.example.sync.GameSyncUseCase.create(getApplication()).syncAfterGame()
+            gameSyncUseCase.onGameFinished(
+                context = getApplication(),
+                totalScore = (statsAfter?.totalCoinsEarned ?: 0).toLong(),
+                highestLevel = playerAfter?.highestLevel ?: state.levelNumber,
+                bestStreak = statsAfter?.highestStreak ?: state.maxCombo,
+                totalPairs = statsAfter?.totalPairsFound ?: state.pairsFound,
+                gamesCompleted = statsAfter?.totalGames ?: 1
+            )
         }
     }
 
@@ -293,7 +365,16 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             )
 
             // Queue pending sync record in Room & trigger WorkManager
-            com.example.sync.GameSyncUseCase.create(getApplication()).syncAfterGame()
+            val stats = repository.getStatistics()
+            val player = repository.playerFlow.firstOrNull()
+            gameSyncUseCase.onGameFinished(
+                context = getApplication(),
+                totalScore = (stats?.totalCoinsEarned ?: 0).toLong(),
+                highestLevel = player?.highestLevel ?: state.levelNumber,
+                bestStreak = stats?.highestStreak ?: state.maxCombo,
+                totalPairs = stats?.totalPairsFound ?: state.pairsFound,
+                gamesCompleted = stats?.totalGames ?: 1
+            )
         }
     }
 
@@ -301,7 +382,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val success = repository.consumeHint()
             if (success) {
-                audioManager.playSfx(SoundEffect.HINT_USED)
+                audioManager.playHint()
                 _uiState.update { it.copy(remainingHints = it.remainingHints - 1) }
 
                 // Find 1 unmatched pair and highlight them
@@ -332,7 +413,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             val player = repository.playerFlow.firstOrNull() ?: return@launch
             if (player.coins >= 150) {
                 repository.addCoins(-150)
-                audioManager.playSfx(SoundEffect.HINT_USED)
+                audioManager.playReveal()
                 val unmatched = _uiState.value.cards.filter { !it.isMatched }
                 val pair = unmatched.groupBy { it.pairId }.values.find { it.size >= 2 } ?: return@launch
 
@@ -363,7 +444,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             val player = repository.playerFlow.firstOrNull() ?: return@launch
             if (player.coins >= 110) {
                 repository.addCoins(-110)
-                audioManager.playSfx(SoundEffect.HINT_USED)
+                audioManager.playFreeze()
                 _uiState.update { it.copy(isTimerFrozen = true) }
                 delay(10000)
                 _uiState.update { it.copy(isTimerFrozen = false) }

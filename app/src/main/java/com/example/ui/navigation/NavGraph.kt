@@ -1,38 +1,66 @@
 package com.example.ui.navigation
 
+import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.R
+import com.example.audio.MusicTrack
+import com.example.audio.SoundEffect
+import com.example.avatar.data.AvatarRepository
+import com.example.avatar.ui.AvatarCropperDialog
+import com.example.avatar.ui.SelectAvatarDialog
+import com.example.avatar.util.AvatarStorageManager
+import com.example.data.local.AppDatabase
+import com.example.data.model.UsernameStatus
+import com.example.data.repository.LeaderboardRepository
+import com.example.data.repository.PendingSyncRepository
+import com.example.sync.ConnectivityObserver
 import com.example.ui.components.NameEntryDialog
 import com.example.ui.screens.achievements.AchievementsScreen
 import com.example.ui.screens.game.GameScreen
 import com.example.ui.screens.home.HomeScreen
+import com.example.ui.screens.profile.ProfileScreen
 import com.example.ui.screens.ranking.RankingScreen
 import com.example.ui.screens.settings.SettingsScreen
 import com.example.ui.screens.shop.ShopScreen
 import com.example.ui.screens.stats.StatsScreen
+import com.example.ui.viewmodel.GameUiStatus
 import com.example.ui.viewmodel.GameViewModel
 import com.example.ui.viewmodel.MainViewModel
+import kotlinx.coroutines.launch
 
-import androidx.navigation.compose.currentBackStackEntryAsState
-import com.example.audio.GameAudioManager
-import com.example.audio.MusicTrack
-import com.example.audio.SoundEffect
-import com.example.ui.viewmodel.GameUiStatus
-
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
-import com.example.R
-import com.example.data.model.UsernameStatus
-import com.example.sync.ConnectivityObserver
+fun routeToMusic(route: String?, gameStatus: GameUiStatus? = null): MusicTrack? {
+    return when (route) {
+        Screen.Home.route -> MusicTrack.HOME
+        Screen.Profile.route -> MusicTrack.HOME
+        Screen.Shop.route -> MusicTrack.SHOP
+        Screen.Ranking.route -> MusicTrack.RANKING
+        Screen.Settings.route -> MusicTrack.HOME
+        Screen.Stats.route -> MusicTrack.HOME
+        Screen.Achievements.route -> MusicTrack.HOME
+        Screen.Game.route -> {
+            when (gameStatus) {
+                is GameUiStatus.LevelCompleted -> MusicTrack.VICTORY
+                is GameUiStatus.Defeat -> MusicTrack.DEFEAT
+                else -> MusicTrack.GAME
+            }
+        }
+        else -> null
+    }
+}
 
 @Composable
 fun MemoryQuestNavGraph(
@@ -58,26 +86,41 @@ fun MemoryQuestNavGraph(
 
     val gameState by gameViewModel.uiState.collectAsStateWithLifecycle()
 
+    val scope = rememberCoroutineScope()
+    val avatarRepository = remember(context) {
+        val db = AppDatabase.getDatabase(context)
+        val storageManager = AvatarStorageManager(context)
+        val leaderboardRepo = LeaderboardRepository()
+        val pendingSyncRepo = PendingSyncRepository(db.pendingSyncDao(), db.memoryQuestDao())
+        AvatarRepository(db.memoryQuestDao(), storageManager, leaderboardRepo, pendingSyncRepo)
+    }
+
+    var showSelectAvatarDialog by remember { mutableStateOf(false) }
+    var croppingUri by remember { mutableStateOf<Uri?>(null) }
+
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+    val requestedTrack = routeToMusic(currentRoute, gameState.status)
+
+    val leaderboardList by mainViewModel.leaderboardList.collectAsStateWithLifecycle()
+    val currentUserInLeaderboard = remember(leaderboardList) {
+        leaderboardList.find { it.isCurrentUser }
+    }
+    val rankingDisplay = remember(currentUserInLeaderboard, leaderboardList) {
+        when {
+            currentUserInLeaderboard != null -> "#${currentUserInLeaderboard.rank}"
+            leaderboardList.isNotEmpty() -> "Top 100"
+            else -> "--"
+        }
+    }
 
     // Centralized Music Track Switcher
-    LaunchedEffect(currentRoute, gameState.status) {
-        val targetTrack = when (currentRoute) {
-            Screen.Home.route, Screen.Stats.route, Screen.Achievements.route -> MusicTrack.HOME
-            Screen.Shop.route -> MusicTrack.SHOP
-            Screen.Ranking.route -> MusicTrack.RANKING
-            Screen.Settings.route -> MusicTrack.HOME
-            Screen.Game.route -> {
-                when (gameState.status) {
-                    is GameUiStatus.LevelCompleted -> MusicTrack.VICTORY
-                    is GameUiStatus.Defeat -> MusicTrack.DEFEAT
-                    else -> MusicTrack.GAME
-                }
-            }
-            else -> MusicTrack.HOME
+    LaunchedEffect(requestedTrack) {
+        if (requestedTrack == null) {
+            mainViewModel.audioManager.stopMusic()
+        } else {
+            mainViewModel.audioManager.playMusic(requestedTrack)
         }
-        mainViewModel.audioManager.playMusic(targetTrack)
     }
 
     // Onboarding check: if player != null and name is empty or NOT_SELECTED
@@ -121,7 +164,7 @@ fun MemoryQuestNavGraph(
             HomeScreen(
                 player = player,
                 onPlayClick = {
-                    mainViewModel.audioManager.playSfx(SoundEffect.BUTTON_CLICK)
+                    mainViewModel.audioManager.playButton()
                     val currentLvl = player?.currentLevel ?: 1
                     gameViewModel.startLevel(
                         level = currentLvl,
@@ -130,31 +173,73 @@ fun MemoryQuestNavGraph(
                     )
                     navController.navigate(Screen.Game.route)
                 },
+                onProfileClick = {
+                    mainViewModel.audioManager.playButton()
+                    navController.navigate(Screen.Profile.route)
+                },
                 onRankingClick = {
-                    mainViewModel.audioManager.playSfx(SoundEffect.BUTTON_CLICK)
+                    mainViewModel.audioManager.playButton()
                     navController.navigate(Screen.Ranking.route)
                 },
                 onShopClick = {
-                    mainViewModel.audioManager.playSfx(SoundEffect.BUTTON_CLICK)
+                    mainViewModel.audioManager.playButton()
                     navController.navigate(Screen.Shop.route)
                 },
                 onSettingsClick = {
-                    mainViewModel.audioManager.playSfx(SoundEffect.BUTTON_CLICK)
+                    mainViewModel.audioManager.playButton()
                     navController.navigate(Screen.Settings.route)
                 },
                 onStatsClick = {
-                    mainViewModel.audioManager.playSfx(SoundEffect.BUTTON_CLICK)
+                    mainViewModel.audioManager.playButton()
                     navController.navigate(Screen.Stats.route)
                 },
                 onAchievementsClick = {
-                    mainViewModel.audioManager.playSfx(SoundEffect.BUTTON_CLICK)
+                    mainViewModel.audioManager.playButton()
                     navController.navigate(Screen.Achievements.route)
                 },
-                onEditNameClick = {
-                    mainViewModel.audioManager.playSfx(SoundEffect.BUTTON_CLICK)
-                    navController.navigate(Screen.Settings.route)
-                },
                 isAdsRemoved = isAdsRemoved
+            )
+        }
+
+        composable(Screen.Profile.route) {
+            ProfileScreen(
+                player = player,
+                stats = stats,
+                achievements = achievements,
+                unlockedThemes = unlockedThemes,
+                rankingDisplay = rankingDisplay,
+                usernameUiState = usernameUiState,
+                onNameInputChange = { input, isOnline ->
+                    mainViewModel.onUsernameInputChanged(input, isOnline)
+                },
+                onReserveUsername = { name, onResult ->
+                    val isOnline = ConnectivityObserver(context) {}.isNetworkAvailable()
+                    mainViewModel.reserveUsername(name, isOnline, onResult)
+                },
+                onEditAvatarClick = {
+                    mainViewModel.audioManager.playButton()
+                    showSelectAvatarDialog = true
+                },
+                onNavigateToStats = {
+                    mainViewModel.audioManager.playButton()
+                    navController.navigate(Screen.Stats.route)
+                },
+                onNavigateToShop = {
+                    mainViewModel.audioManager.playButton()
+                    navController.navigate(Screen.Shop.route)
+                },
+                onNavigateToAchievements = {
+                    mainViewModel.audioManager.playButton()
+                    navController.navigate(Screen.Achievements.route)
+                },
+                onNavigateToRanking = {
+                    mainViewModel.audioManager.playButton()
+                    navController.navigate(Screen.Ranking.route)
+                },
+                onBackClick = {
+                    mainViewModel.audioManager.playButton()
+                    navController.popBackStack()
+                }
             )
         }
 
@@ -162,6 +247,7 @@ fun MemoryQuestNavGraph(
             GameScreen(
                 state = gameState,
                 coins = player?.coins ?: 0,
+                player = player,
                 onCardClick = { index -> gameViewModel.onCardClick(index) },
                 onUseHint = { gameViewModel.useHint() },
                 onRevealPair = { gameViewModel.useRevealPair() },
@@ -198,14 +284,6 @@ fun MemoryQuestNavGraph(
                 sfxVolume = sfxVolume,
                 language = language,
                 darkMode = darkMode,
-                usernameUiState = usernameUiState,
-                onNameInputChange = { input, isOnline ->
-                    mainViewModel.onUsernameInputChanged(input, isOnline)
-                },
-                onReserveUsername = { name, onResult ->
-                    val isOnline = ConnectivityObserver(context) {}.isNetworkAvailable()
-                    mainViewModel.reserveUsername(name, isOnline, onResult)
-                },
                 onSetSound = { mainViewModel.setSoundEnabled(it) },
                 onSetMusic = { mainViewModel.setMusicEnabled(it) },
                 onSetVibration = { mainViewModel.setVibrationEnabled(it) },
@@ -213,14 +291,13 @@ fun MemoryQuestNavGraph(
                 onSetSfxVolume = { mainViewModel.setSfxVolume(it) },
                 onSetLanguage = { mainViewModel.setLanguage(it) },
                 onSetDarkMode = { mainViewModel.setDarkMode(it) },
-                onEditName = { name -> mainViewModel.setPlayerName(name) },
                 onResetDefaults = { mainViewModel.resetSettings() },
-                onGoToRanking = {
-                    mainViewModel.audioManager.playSfx(SoundEffect.BUTTON_CLICK)
-                    navController.navigate(Screen.Ranking.route)
+                onResetGameProgress = {
+                    mainViewModel.audioManager.playButton()
+                    mainViewModel.resetGameProgress()
                 },
                 onBackClick = {
-                    mainViewModel.audioManager.playSfx(SoundEffect.BUTTON_CLICK)
+                    mainViewModel.audioManager.playButton()
                     navController.popBackStack()
                 }
             )
@@ -230,14 +307,22 @@ fun MemoryQuestNavGraph(
             StatsScreen(
                 player = player,
                 stats = stats,
-                onBackClick = { navController.popBackStack() }
+                onNavigateToProfile = {
+                    mainViewModel.audioManager.playButton()
+                    navController.navigate(Screen.Profile.route)
+                },
+                onBackClick = {
+                    mainViewModel.audioManager.playButton()
+                    navController.popBackStack()
+                }
             )
         }
 
         composable(Screen.Ranking.route) {
-            val leaderboardList by mainViewModel.leaderboardList.collectAsStateWithLifecycle()
             val isLeaderboardLoading by mainViewModel.isLeaderboardLoading.collectAsStateWithLifecycle()
             val leaderboardError by mainViewModel.leaderboardError.collectAsStateWithLifecycle()
+            val lastFetchTime by mainViewModel.lastLeaderboardFetchTime.collectAsStateWithLifecycle()
+            val isOnline by mainViewModel.isOnline.collectAsStateWithLifecycle()
 
             LaunchedEffect(Unit) {
                 mainViewModel.loadLeaderboard()
@@ -249,6 +334,8 @@ fun MemoryQuestNavGraph(
                 leaderboardList = leaderboardList,
                 isLoading = isLeaderboardLoading,
                 errorMessage = leaderboardError,
+                lastFetchTime = lastFetchTime,
+                isOnline = isOnline,
                 onRefresh = { mainViewModel.loadLeaderboard() },
                 onBackClick = { navController.popBackStack() },
                 isAdsRemoved = isAdsRemoved
@@ -262,5 +349,35 @@ fun MemoryQuestNavGraph(
                 onBackClick = { navController.popBackStack() }
             )
         }
+    }
+
+    if (showSelectAvatarDialog) {
+        SelectAvatarDialog(
+            player = player,
+            onPresetSelected = { presetId ->
+                scope.launch { avatarRepository.selectPresetAvatar(presetId) }
+                showSelectAvatarDialog = false
+            },
+            onCustomPhotoSelected = { uri ->
+                showSelectAvatarDialog = false
+                croppingUri = uri
+            },
+            onResetDefault = {
+                scope.launch { avatarRepository.resetToDefaultAvatar() }
+                showSelectAvatarDialog = false
+            },
+            onDismiss = { showSelectAvatarDialog = false }
+        )
+    }
+
+    if (croppingUri != null) {
+        AvatarCropperDialog(
+            imageUri = croppingUri!!,
+            onCroppedAndSaved = { localPath ->
+                croppingUri = null
+                scope.launch { avatarRepository.saveCustomAvatar(localPath) }
+            },
+            onCancel = { croppingUri = null }
+        )
     }
 }

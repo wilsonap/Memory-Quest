@@ -45,7 +45,9 @@ class MusicManager private constructor(private val context: Context) : DefaultLi
     val playerInstanceCount: Int
         get() = if (exoPlayer != null) 1 else 0
 
-    var isMusicEnabled: Boolean = true
+    var isMusicEnabled: Boolean = false
+        private set
+    var isSettingsLoaded: Boolean = false
         private set
     var musicVolume: Float = 0.5f
         private set
@@ -93,14 +95,14 @@ class MusicManager private constructor(private val context: Context) : DefaultLi
     override fun onStart(owner: LifecycleOwner) {
         super.onStart(owner)
         isAppInForeground = true
-        Log.d(LOG_TAG, "Lifecycle: Foreground | Current track: ${currentTrack?.name ?: "NONE"} | Action: RESUME | Player instances: $playerInstanceCount")
+        Log.d(LOG_TAG, "Lifecycle: Foreground | Current route: ${currentTrack?.name ?: "NONE"} | Action: RESUME | Player instances: $playerInstanceCount")
         resumeMusic()
     }
 
     override fun onStop(owner: LifecycleOwner) {
         super.onStop(owner)
         isAppInForeground = false
-        Log.d(LOG_TAG, "Lifecycle: Background | Current track: ${currentTrack?.name ?: "NONE"} | Action: PAUSE | Player instances: $playerInstanceCount")
+        Log.d(LOG_TAG, "Lifecycle: Background | Current route: ${currentTrack?.name ?: "NONE"} | Action: PAUSE | Player instances: $playerInstanceCount")
         pauseMusic()
     }
 
@@ -109,13 +111,31 @@ class MusicManager private constructor(private val context: Context) : DefaultLi
             launch {
                 dataStoreManager.musicEnabled.collectLatest { enabled ->
                     val prevEnabled = isMusicEnabled
+                    val prevLoaded = isSettingsLoaded
+                    isSettingsLoaded = true
                     isMusicEnabled = enabled
+
+                    Log.d(
+                        LOG_TAG,
+                        "Settings loaded | musicEnabled=$enabled (was $prevEnabled, wasLoaded=$prevLoaded) | Current route: ${currentTrack?.name ?: "NONE"}"
+                    )
+
                     if (!enabled) {
-                        Log.d(LOG_TAG, "Setting changed: Music disabled | Current track: ${currentTrack?.name ?: "NONE"} | Action: PAUSE | Player instances: $playerInstanceCount")
-                        pauseMusic()
-                    } else if (!prevEnabled && currentTrack != null && isAppInForeground) {
-                        Log.d(LOG_TAG, "Setting changed: Music enabled | Current track: ${currentTrack?.name ?: "NONE"} | Action: RESUME | Player instances: $playerInstanceCount")
-                        playTrack(currentTrack!!)
+                        Log.d(
+                            LOG_TAG,
+                            "stop() | Setting changed: musicEnabled=false | Current route: ${currentTrack?.name ?: "NONE"}"
+                        )
+                        stopMusic()
+                    } else {
+                        if (!prevLoaded || !prevEnabled) {
+                            if (currentTrack != null && isAppInForeground) {
+                                Log.d(
+                                    LOG_TAG,
+                                    "play() | Setting changed/loaded: musicEnabled=true | Current route: ${currentTrack?.name ?: "NONE"}"
+                                )
+                                playTrack(currentTrack!!)
+                            }
+                        }
                     }
                 }
             }
@@ -133,23 +153,26 @@ class MusicManager private constructor(private val context: Context) : DefaultLi
     fun playTrack(track: MusicTrack) {
         val player = exoPlayer ?: return
         val prevTrack = currentTrack
+        currentTrack = track
 
-        if (!isMusicEnabled || !isAppInForeground) {
+        Log.d(
+            LOG_TAG,
+            "play() requested for track ${track.name} | Current route: ${track.name} | isSettingsLoaded=$isSettingsLoaded | musicEnabled=$isMusicEnabled | isAppInForeground=$isAppInForeground"
+        )
+
+        if (!isSettingsLoaded || !isMusicEnabled || !isAppInForeground) {
             Log.d(
                 LOG_TAG,
-                "Current track: ${prevTrack?.name ?: "NONE"} | Requested track: ${track.name} | Action: PAUSE (Disabled or Background) | Player instances: $playerInstanceCount"
+                "stop() | play() blocked for track ${track.name}: isSettingsLoaded=$isSettingsLoaded, musicEnabled=$isMusicEnabled, isAppInForeground=$isAppInForeground"
             )
-            if (player.isPlaying) {
-                pauseMusic()
-            }
-            currentTrack = track
+            stopMusic()
             return
         }
 
         if (prevTrack == track && (player.isPlaying || player.playbackState == Player.STATE_BUFFERING || player.playbackState == Player.STATE_READY)) {
             Log.d(
                 LOG_TAG,
-                "Current track: ${prevTrack.name} | Requested track: ${track.name} | Action: KEEP | Player instances: $playerInstanceCount"
+                "Current route: ${track.name} | Requested track: ${track.name} | Action: KEEP | Player instances: $playerInstanceCount"
             )
             return
         }
@@ -178,20 +201,17 @@ class MusicManager private constructor(private val context: Context) : DefaultLi
         if (foundResId == 0) {
             Log.w(
                 LOG_TAG,
-                "Current track: ${prevTrack?.name ?: "NONE"} | Requested track: ${track.name} | Action: STOP (Resource for ${track.name} not found) | Player instances: $playerInstanceCount"
+                "stop() | Current route: ${track.name} | Resource for ${track.name} not found"
             )
             stopMusic()
-            currentTrack = track
             return
         }
 
         val actionName = if (prevTrack == null) "PLAY" else "SWITCH"
         Log.d(
             LOG_TAG,
-            "Current track: ${prevTrack?.name ?: "NONE"} | Requested track: ${track.name} | Action: $actionName ($loadedName) | Player instances: $playerInstanceCount"
+            "play() | Current route: ${track.name} | Previous track: ${prevTrack?.name ?: "NONE"} -> ${track.name} ($loadedName) | Player instances: $playerInstanceCount"
         )
-
-        currentTrack = track
 
         fadeJob?.cancel()
         fadeJob = mainScope.launch {
@@ -237,8 +257,8 @@ class MusicManager private constructor(private val context: Context) : DefaultLi
     fun pauseMusic() {
         fadeJob?.cancel()
         try {
+            Log.d(LOG_TAG, "pause() called | Current route: ${currentTrack?.name ?: "NONE"}")
             if (exoPlayer?.isPlaying == true) {
-                Log.d(LOG_TAG, "Current track: ${currentTrack?.name ?: "NONE"} | Action: PAUSE | Player instances: $playerInstanceCount")
                 exoPlayer?.pause()
             }
         } catch (e: Exception) {
@@ -247,12 +267,20 @@ class MusicManager private constructor(private val context: Context) : DefaultLi
     }
 
     fun resumeMusic() {
-        if (!isMusicEnabled || !isAppInForeground) return
+        Log.d(
+            LOG_TAG,
+            "resume() requested | Current route: ${currentTrack?.name ?: "NONE"} | isSettingsLoaded=$isSettingsLoaded | musicEnabled=$isMusicEnabled | isAppInForeground=$isAppInForeground"
+        )
+        if (!isSettingsLoaded || !isMusicEnabled || !isAppInForeground) {
+            Log.d(LOG_TAG, "stop() | resume() blocked because music is disabled or settings not loaded")
+            stopMusic()
+            return
+        }
         val player = exoPlayer ?: return
 
         try {
             if (player.playbackState == Player.STATE_READY && !player.isPlaying) {
-                Log.d(LOG_TAG, "Current track: ${currentTrack?.name ?: "NONE"} | Action: RESUME | Player instances: $playerInstanceCount")
+                Log.d(LOG_TAG, "resume() | Resuming ExoPlayer playback for ${currentTrack?.name ?: "NONE"}")
                 player.volume = musicVolume
                 player.play()
             } else if (currentTrack != null) {
@@ -266,7 +294,7 @@ class MusicManager private constructor(private val context: Context) : DefaultLi
     fun stopMusic() {
         fadeJob?.cancel()
         try {
-            Log.d(LOG_TAG, "Current track: ${currentTrack?.name ?: "NONE"} | Action: STOP | Player instances: $playerInstanceCount")
+            Log.d(LOG_TAG, "stop() called | Current route: ${currentTrack?.name ?: "NONE"} | Player instances: $playerInstanceCount")
             exoPlayer?.stop()
             exoPlayer?.clearMediaItems()
         } catch (e: Exception) {

@@ -36,7 +36,14 @@ class SyncWorker(
             val usernameValid = usernameRepo.validatePendingUsernameOnline()
             Log.d(TAG, "Username validation result: $usernameValid")
 
-            // 2. Sync game pending records to leaderboard
+            // 2. Ensure leaderboard/{uid} exists for confirmed player
+            val player = memoryQuestDao.getPlayer()
+            val stats = memoryQuestDao.getStatistics()
+            if (player != null && player.usernameStatus == com.example.data.model.UsernameStatus.CONFIRMED.name) {
+                leaderboardRepo.ensureLeaderboardExists(player, stats)
+            }
+
+            // 3. Sync game pending records to leaderboard
             val pendingRepo = PendingSyncRepository(
                 pendingSyncDao = pendingSyncDao,
                 memoryQuestDao = memoryQuestDao,

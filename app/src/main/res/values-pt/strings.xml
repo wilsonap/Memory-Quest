@@ -3,6 +3,15 @@
     <string name="settings_title">⚙ CONFIGURAÇÕES</string>
 
     <!-- Player Profile -->
+    <string name="profile_title">👤 PERFIL DO JOGADOR</string>
+    <string name="profile_view_profile">Ver Perfil</string>
+    <string name="profile_view_stats">Ver Estatísticas</string>
+    <string name="profile_edit_name">Editar Nome</string>
+    <string name="profile_change_avatar">Trocar Avatar</string>
+    <string name="profile_share">Compartilhar Perfil</string>
+    <string name="profile_unlocked_themes">Temas Desbloqueados</string>
+    <string name="profile_latest_achievements">Últimas Conquistas</string>
+    <string name="profile_badges">Medalhas</string>
     <string name="settings_player_name">Nome do Jogador</string>
     <string name="settings_edit">Editar</string>
     <string name="settings_edit_name_title">Editar Nome do Jogador</string>
