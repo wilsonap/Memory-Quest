@@ -98,4 +98,19 @@ interface MemoryQuestDao {
 
     @Update
     suspend fun updateAchievement(achievement: AchievementEntity)
+
+    @Query("DELETE FROM unlocked_themes")
+    suspend fun clearUnlockedThemes()
+
+    @Query("DELETE FROM inventory")
+    suspend fun clearInventory()
+
+    @Query("DELETE FROM achievements")
+    suspend fun clearAchievements()
+
+    @Query("DELETE FROM player")
+    suspend fun deleteAllPlayers()
+
+    @Query("DELETE FROM statistics")
+    suspend fun deleteAllStatistics()
 }

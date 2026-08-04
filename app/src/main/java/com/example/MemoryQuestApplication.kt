@@ -6,6 +6,7 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.appcheck.AppCheckProviderFactory
 import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
+import com.example.config.FirebaseBootstrap
 
 class MemoryQuestApplication : Application() {
 
@@ -21,6 +22,8 @@ class MemoryQuestApplication : Application() {
             )
             return
         }
+
+        FirebaseBootstrap.markReady()
 
         try {
             val appCheck = FirebaseAppCheck.getInstance(firebaseApp)

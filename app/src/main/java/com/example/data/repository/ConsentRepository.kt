@@ -3,6 +3,7 @@ package com.example.data.repository
 import android.util.Log
 import com.example.BuildConfig
 import com.example.config.LegalConfig
+import com.example.config.FirebaseBootstrap
 import com.example.data.local.DataStoreManager
 import com.example.data.model.UserConsentState
 import com.google.firebase.auth.FirebaseAuth
@@ -16,9 +17,18 @@ import java.util.Locale
 
 class ConsentRepository(
     private val dataStoreManager: DataStoreManager,
-    private val auth: FirebaseAuth = FirebaseAuth.getInstance(),
-    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
+    authProvider: () -> FirebaseAuth = { FirebaseAuth.getInstance() },
+    firestoreProvider: () -> FirebaseFirestore = { FirebaseFirestore.getInstance() }
 ) {
+    private val auth: FirebaseAuth by lazy {
+        FirebaseBootstrap.requireReady()
+        authProvider()
+    }
+
+    private val firestore: FirebaseFirestore by lazy {
+        FirebaseBootstrap.requireReady()
+        firestoreProvider()
+    }
     companion object {
         private const val TAG = "ConsentRepository"
     }

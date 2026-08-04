@@ -4,6 +4,7 @@ import android.util.Log
 import com.example.data.local.entity.PlayerEntity
 import com.example.data.local.entity.StatisticsEntity
 import com.example.data.model.UsernameStatus
+import com.example.config.FirebaseBootstrap
 import com.example.util.UsernameNormalizer
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
@@ -33,9 +34,19 @@ data class LeaderboardPlayer(
 )
 
 class LeaderboardRepository(
-    private val auth: FirebaseAuth = FirebaseAuth.getInstance(),
-    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
+    authProvider: () -> FirebaseAuth = { FirebaseAuth.getInstance() },
+    firestoreProvider: () -> FirebaseFirestore = { FirebaseFirestore.getInstance() }
 ) {
+
+    private val auth: FirebaseAuth by lazy {
+        FirebaseBootstrap.requireReady()
+        authProvider()
+    }
+
+    private val firestore: FirebaseFirestore by lazy {
+        FirebaseBootstrap.requireReady()
+        firestoreProvider()
+    }
 
     companion object {
         private const val LOG_TAG = "MemoryQuestUsername"

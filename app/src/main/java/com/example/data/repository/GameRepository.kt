@@ -271,4 +271,13 @@ class GameRepository(
             dao.insertOrUpdateStatistics(initialStats)
         }
     }
+
+    /** Apaga todo o progresso local após exclusão remota bem-sucedida da conta. */
+    suspend fun wipeAllLocalDataForAccountDeletion() {
+        dao.clearAchievements()
+        dao.clearInventory()
+        dao.clearUnlockedThemes()
+        dao.deleteAllStatistics()
+        dao.deleteAllPlayers()
+    }
 }

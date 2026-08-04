@@ -1,5 +1,6 @@
 package com.example.ui.screens.settings
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -37,11 +38,15 @@ import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
@@ -52,6 +57,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,6 +78,7 @@ import com.example.ui.components.TopGameBar
 
 import com.example.config.LegalConfig
 import com.example.data.model.UserConsentState
+import com.example.data.repository.DeleteAccountResult
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -95,14 +102,48 @@ fun SettingsScreen(
     onSetDarkMode: (String) -> Unit,
     onResetDefaults: () -> Unit,
     onResetGameProgress: () -> Unit = {},
+    onDeleteAccount: (onResult: (DeleteAccountResult) -> Unit) -> Unit = {},
+    onDeleteAccountSuccess: () -> Unit = {},
     onBackClick: () -> Unit,
     isAdsRemoved: Boolean = false,
     consentState: UserConsentState? = null,
     modifier: Modifier = Modifier
 ) {
     var showResetConfirmDialog by remember { mutableStateOf(false) }
+    var showDeleteAccountDialog by remember { mutableStateOf(false) }
+    var showDeleteAccountFinalDialog by remember { mutableStateOf(false) }
+    var deleteConfirmationText by remember { mutableStateOf("") }
+    var isDeletingAccount by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val deleteConfirmationKeyword = stringResource(R.string.delete_account_confirmation_keyword)
+
+    fun startDeleteAccount() {
+        if (isDeletingAccount) return
+        isDeletingAccount = true
+        onDeleteAccount { result ->
+            isDeletingAccount = false
+            when (result) {
+                DeleteAccountResult.Success -> {
+                    scope.launch {
+                        snackbarHostState.showSnackbar(
+                            context.getString(R.string.delete_account_success)
+                        )
+                        onDeleteAccountSuccess()
+                    }
+                }
+                else -> {
+                    scope.launch {
+                        snackbarHostState.showSnackbar(
+                            deleteAccountResultMessage(context, result)
+                        )
+                    }
+                }
+            }
+        }
+    }
 
     if (showResetConfirmDialog) {
         AlertDialog(
@@ -149,12 +190,142 @@ fun SettingsScreen(
         )
     }
 
+    if (showDeleteAccountDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!isDeletingAccount) showDeleteAccountDialog = false
+            },
+            title = {
+                Text(
+                    text = stringResource(R.string.delete_account_title),
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                )
+            },
+            text = {
+                Text(
+                    text = stringResource(R.string.delete_account_message),
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteAccountDialog = false
+                        deleteConfirmationText = ""
+                        showDeleteAccountFinalDialog = true
+                    },
+                    enabled = !isDeletingAccount,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text(
+                        text = stringResource(R.string.delete_account_confirm),
+                        color = MaterialTheme.colorScheme.onError,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { if (!isDeletingAccount) showDeleteAccountDialog = false },
+                    enabled = !isDeletingAccount
+                ) {
+                    Text(stringResource(R.string.delete_account_cancel))
+                }
+            },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        )
+    }
+
+    if (showDeleteAccountFinalDialog) {
+        val isConfirmationValid = deleteConfirmationText == deleteConfirmationKeyword
+
+        AlertDialog(
+            onDismissRequest = {
+                if (!isDeletingAccount) {
+                    showDeleteAccountFinalDialog = false
+                    deleteConfirmationText = ""
+                }
+            },
+            title = {
+                Text(
+                    text = stringResource(R.string.delete_account_final_title),
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = stringResource(R.string.delete_account_final_message),
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    )
+                    OutlinedTextField(
+                        value = deleteConfirmationText,
+                        onValueChange = { deleteConfirmationText = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isDeletingAccount,
+                        singleLine = true,
+                        label = { Text(stringResource(R.string.delete_account_confirmation_hint)) },
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (!isConfirmationValid || isDeletingAccount) return@Button
+                        showDeleteAccountFinalDialog = false
+                        deleteConfirmationText = ""
+                        startDeleteAccount()
+                    },
+                    enabled = isConfirmationValid && !isDeletingAccount,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text(
+                        text = stringResource(R.string.delete_account_final_confirm),
+                        color = MaterialTheme.colorScheme.onError,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = {
+                        if (!isDeletingAccount) {
+                            showDeleteAccountFinalDialog = false
+                            deleteConfirmationText = ""
+                        }
+                    },
+                    enabled = !isDeletingAccount
+                ) {
+                    Text(stringResource(R.string.delete_account_cancel))
+                }
+            },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        )
+    }
+
+    Box(modifier = modifier.fillMaxSize()) {
     Scaffold(
         containerColor = Color.Transparent,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             BannerAdContainer(isAdsRemoved = isAdsRemoved)
         },
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
@@ -287,7 +458,6 @@ fun SettingsScreen(
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
 
                         // Botão Testar Efeitos Sonoros
-                        val scope = androidx.compose.runtime.rememberCoroutineScope()
                         OutlinedButton(
                             onClick = {
                                 scope.launch {
@@ -488,10 +658,20 @@ fun SettingsScreen(
 
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
 
-                        // Exclusão de dados / Reiniciar jogo
+                        // Exclusão de conta (dados remotos + locais + auth)
                         NavigationLinkRow(
                             icon = Icons.Default.Delete,
-                            title = "Exclusão e Reinício de Dados",
+                            title = stringResource(R.string.delete_account_menu_title),
+                            enabled = !isDeletingAccount,
+                            onClick = { showDeleteAccountDialog = true }
+                        )
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+
+                        // Reinício local de progresso
+                        NavigationLinkRow(
+                            icon = Icons.Default.RestartAlt,
+                            title = stringResource(R.string.reset_game_menu_title),
                             onClick = { showResetConfirmDialog = true }
                         )
 
@@ -620,26 +800,80 @@ fun SettingsScreen(
             }
         }
     }
+
+        if (isDeletingAccount) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(Color.Black.copy(alpha = 0.45f))
+                    .clickable(enabled = false) {},
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 6.dp
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 32.dp, vertical = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.error)
+                        Text(
+                            text = stringResource(R.string.delete_account_in_progress),
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun deleteAccountResultMessage(context: Context, result: DeleteAccountResult): String {
+    return when (result) {
+        DeleteAccountResult.Success -> context.getString(R.string.delete_account_success)
+        DeleteAccountResult.NoInternet -> context.getString(R.string.delete_account_error_no_internet)
+        DeleteAccountResult.InvalidSession -> context.getString(R.string.delete_account_error_invalid_session)
+        DeleteAccountResult.PermissionDenied -> context.getString(R.string.delete_account_error_permission)
+        DeleteAccountResult.RequiresRecentLogin -> context.getString(R.string.delete_account_error_recent_login)
+        is DeleteAccountResult.AuthDeleteFailure -> result.cause.message?.takeIf { it.isNotBlank() }
+            ?: context.getString(R.string.delete_account_error_auth)
+        is DeleteAccountResult.RemoteFailure -> result.cause.message?.takeIf { it.isNotBlank() }
+            ?: context.getString(R.string.delete_account_error_generic)
+    }
 }
 
 @Composable
 private fun NavigationLinkRow(
     icon: ImageVector,
     title: String,
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .clickable(enabled = enabled) { onClick() }
             .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(imageVector = icon, contentDescription = title, tint = MaterialTheme.colorScheme.primary)
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                tint = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+            )
             Spacer(modifier = Modifier.width(10.dp))
-            Text(text = title, style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    color = if (enabled) MaterialTheme.colorScheme.onSurface
+                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                )
+            )
         }
         Icon(
             imageVector = Icons.Default.ChevronRight,

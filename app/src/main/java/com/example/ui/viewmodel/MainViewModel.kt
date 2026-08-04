@@ -47,21 +47,36 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 
 import com.example.config.LegalConfig
+import com.example.config.FirebaseBootstrap
 import com.example.data.model.UserConsentState
 import com.example.data.repository.ConsentRepository
+import com.example.data.repository.DeleteAccountRepository
+import com.example.data.repository.DeleteAccountResult
 import com.example.sync.ConsentSyncWorker
+import com.example.avatar.util.AvatarStorageManager
+import androidx.work.WorkManager
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val db = AppDatabase.getDatabase(application)
     private val dataStore = DataStoreManager(application)
     val repository = GameRepository(db.memoryQuestDao(), dataStore)
-    val leaderboardRepository = LeaderboardRepository()
-    val usernameRepository = UsernameRepository(db.memoryQuestDao(), leaderboardRepository)
-    val usernameSettingsRepository = UsernameSettingsRepository(dataStore)
-    val consentRepository = ConsentRepository(dataStore)
+    private val leaderboardRepository by lazy { LeaderboardRepository() }
+    private val usernameRepository by lazy { UsernameRepository(db.memoryQuestDao(), leaderboardRepository) }
+    private val usernameSettingsRepository = UsernameSettingsRepository(dataStore)
+    private val consentRepository by lazy { ConsentRepository(dataStore) }
     val audioManager = GameAudioManager.getInstance(application)
     val interstitialManager = InterstitialManager(application)
+
+    private val deleteAccountRepository by lazy {
+        DeleteAccountRepository(
+            memoryQuestDao = db.memoryQuestDao(),
+            pendingSyncDao = db.pendingSyncDao(),
+            dataStoreManager = dataStore,
+            avatarStorageManager = AvatarStorageManager(application),
+            gameRepository = repository
+        )
+    }
 
     init {
         interstitialManager.loadAd()
@@ -215,6 +230,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             repository.ensureInitialized()
+            if (!FirebaseBootstrap.isReady) {
+                Log.w("MemoryQuestFirebase", "Firebase indisponível — pulando sync/auth na inicialização")
+                return@launch
+            }
             leaderboardRepository.ensureAuthenticated()
 
             val isOnline = ConnectivityObserver(context) {}.isNetworkAvailable()
@@ -268,6 +287,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun syncLeaderboard() {
+        if (!FirebaseBootstrap.isReady) return
         val context = getApplication<Application>()
         val online = ConnectivityObserver(context) {}.isNetworkAvailable()
         if (!online) {
@@ -288,6 +308,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun loadLeaderboard() {
+        if (!FirebaseBootstrap.isReady) return
         val context = getApplication<Application>()
         val online = ConnectivityObserver(context) {}.isNetworkAvailable()
         _isOnline.value = online
@@ -608,6 +629,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun resetGameProgress() {
         viewModelScope.launch { repository.resetGameProgress() }
+    }
+
+    fun deleteAccount(onResult: (DeleteAccountResult) -> Unit) {
+        viewModelScope.launch {
+            val context = getApplication<Application>()
+            val isOnline = ConnectivityObserver(context) {}.isNetworkAvailable()
+            val result = deleteAccountRepository.deleteAccount(isOnline)
+            if (result is DeleteAccountResult.Success) {
+                clearStateAfterAccountDeletion()
+            }
+            onResult(result)
+        }
+    }
+
+    private fun clearStateAfterAccountDeletion() {
+        WorkManager.getInstance(getApplication()).cancelAllWork()
+        _leaderboardList.value = emptyList()
+        _leaderboardError.value = null
+        _lastLeaderboardFetchTime.value = 0L
+        _usernameUiState.value = UsernameUiState()
+        _usernameEligibility.value = UsernameChangeEligibility.Allowed
+        levelsCompletedCount = 0
+        lastInterstitialTime = 0
     }
 
     override fun onCleared() {

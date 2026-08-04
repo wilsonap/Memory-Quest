@@ -166,4 +166,18 @@ class DataStoreManager(private val context: Context) {
             prefs[KEY_DARK_MODE] = "AUTO"
         }
     }
+
+    /** Remove consentimento, cache de username e flags de conta — usado na exclusão de conta. */
+    suspend fun clearAccountData() {
+        context.dataStore.edit { prefs ->
+            prefs.remove(KEY_TERMS_ACCEPTED)
+            prefs.remove(KEY_PRIVACY_ACCEPTED)
+            prefs.remove(KEY_TERMS_VERSION_ACCEPTED)
+            prefs.remove(KEY_PRIVACY_VERSION_ACCEPTED)
+            prefs.remove(KEY_ACCEPTED_AT_LOCAL)
+            prefs.remove(KEY_CONSENT_SYNC_PENDING)
+            prefs.remove(KEY_CACHED_LAST_USERNAME_CHANGE_AT)
+            prefs.remove(KEY_CACHED_NEXT_USERNAME_CHANGE_AT)
+        }
+    }
 }

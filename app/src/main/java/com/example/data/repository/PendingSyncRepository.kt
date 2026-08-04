@@ -4,6 +4,7 @@ import android.util.Log
 import com.example.data.local.dao.MemoryQuestDao
 import com.example.data.local.dao.PendingSyncDao
 import com.example.data.local.entity.PendingSyncEntity
+import com.example.config.FirebaseBootstrap
 import com.example.data.model.UsernameStatus
 import com.example.util.UsernameNormalizer
 import com.google.firebase.firestore.FieldValue
@@ -16,8 +17,13 @@ class PendingSyncRepository(
     private val pendingSyncDao: PendingSyncDao,
     private val memoryQuestDao: MemoryQuestDao,
     private val leaderboardRepository: LeaderboardRepository = LeaderboardRepository(),
-    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
+    firestoreProvider: () -> FirebaseFirestore = { FirebaseFirestore.getInstance() }
 ) {
+
+    private val firestore: FirebaseFirestore by lazy {
+        FirebaseBootstrap.requireReady()
+        firestoreProvider()
+    }
 
     companion object {
         private const val TAG = "GameSync"

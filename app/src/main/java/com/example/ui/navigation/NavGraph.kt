@@ -331,6 +331,12 @@ fun MemoryQuestNavGraph(
                     mainViewModel.audioManager.playButton()
                     mainViewModel.resetGameProgress()
                 },
+                onDeleteAccount = { onResult ->
+                    mainViewModel.deleteAccount(onResult)
+                },
+                onDeleteAccountSuccess = {
+                    navController.popBackStack(Screen.Home.route, inclusive = false)
+                },
                 onBackClick = {
                     mainViewModel.audioManager.playButton()
                     navController.popBackStack()
