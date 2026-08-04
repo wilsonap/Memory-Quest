@@ -16,6 +16,17 @@
     <string name="settings_edit">Editar</string>
     <string name="settings_edit_name_title">Editar Nome do Jogador</string>
     <string name="settings_edit_name_subtitle">Digite seu novo nome para exibir no ranking e perfil.</string>
+    <string name="username_change_status_allowed">Você pode alterar seu nome.</string>
+    <string name="username_change_status_cooldown_days">Nova alteração disponível em %1$d dias.</string>
+    <string name="username_change_status_cooldown_hours">Nova alteração disponível em %1$d horas.</string>
+    <string name="username_change_status_cooldown_minutes">Nova alteração disponível em %1$d minutos.</string>
+    <string name="username_change_offline_error">Conecte-se à internet para alterar seu nome.</string>
+    <string name="username_change_unauthenticated_error">Sua sessão expirou. Faça login novamente.</string>
+    <string name="username_change_firestore_unavailable_error">Não foi possível conectar ao servidor.</string>
+    <string name="username_change_permission_denied_error">Erro de permissão no servidor (%1$s).</string>
+    <string name="username_change_cooldown_days_msg">Você poderá alterar seu nome novamente em %1$d dias.</string>
+    <string name="username_change_cooldown_hours_msg">Você poderá alterar seu nome novamente em %1$d horas.</string>
+    <string name="username_change_cooldown_minutes_msg">Você poderá alterar seu nome novamente em %1$d minutos.</string>
 
     <!-- Preferences -->
     <string name="settings_audio_title">Preferências de Áudio e Efeitos</string>
@@ -100,8 +111,8 @@
     <string name="shop_owned">Comprado</string>
 
     <!-- Shop Items - Boosters -->
-    <string name="booster_life_title">❤️ Vida Extra</string>
-    <string name="booster_life_desc">Comece a próxima fase com +1 vida extra (Máx +2 vidas).</string>
+    <string name="booster_life_title">❤️ Vida Extra (+3)</string>
+    <string name="booster_life_desc">Adiciona +3 vidas extras acumuláveis ao seu total.</string>
     <string name="booster_hint_title">💡 Pacote de Dicas (x3)</string>
     <string name="booster_hint_desc">Destaque instantaneamente um par de cartas correspondentes durante o jogo.</string>
     <string name="booster_reveal_title">👀 Revelar Par</string>
@@ -189,4 +200,22 @@
     <string name="username_suggestions_offline_title">Sugestões para tentar quando estiver online:</string>
     <string name="username_checking_availability">Verificando disponibilidade...</string>
     <string name="username_available">Nome disponível! ✓</string>
+
+    <!-- Privacy & Terms Consent -->
+    <string name="consent_title">Privacidade e Termos</string>
+    <string name="consent_explanation">Para continuar a usar o Memory Quest, por favor leia e aceite a nossa Política de Privacidade e os Termos de Uso.</string>
+    <string name="consent_read_privacy">Ler Política de Privacidade</string>
+    <string name="consent_read_terms">Ler Termos de Uso</string>
+    <string name="consent_checkbox">Li e aceito a Política de Privacidade e os Termos de Uso.</string>
+    <string name="consent_accept_continue">Aceitar e continuar</string>
+    <string name="consent_exit">Sair</string>
+    <string name="consent_offline_notice">O aceite será sincronizado quando houver conexão.</string>
+    <string name="legal_and_privacy">Legal e Privacidade</string>
+    <string name="consent_terms_version">Versão dos Termos: %1$s</string>
+    <string name="consent_privacy_version">Versão da Privacidade: %1$s</string>
+    <string name="consent_accepted_date">Aceito em: %1$s</string>
+    <string name="consent_sync_status">Status de Sincronização: %1$s</string>
+    <string name="consent_status_synced">Sincronizado</string>
+    <string name="consent_status_pending">Pendente (Offline)</string>
+    <string name="consent_delete_data_info">Para retirar o consentimento ou solicitar a exclusão de dados, acesse a Exclusão e Reinício de Dados.</string>
 </resources>

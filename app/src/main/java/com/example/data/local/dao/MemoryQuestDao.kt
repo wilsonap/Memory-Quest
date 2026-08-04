@@ -49,6 +49,9 @@ interface MemoryQuestDao {
     @Query("UPDATE player SET extraLives = extraLives + :amount WHERE id = 1")
     suspend fun addExtraLives(amount: Int)
 
+    @Query("UPDATE player SET extraLives = :count WHERE id = 1")
+    suspend fun setExtraLives(count: Int)
+
 
     // --- Statistics ---
     @Query("SELECT * FROM statistics WHERE id = 1")

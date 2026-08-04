@@ -1,5 +1,8 @@
 package com.example.ui.navigation
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -41,6 +44,10 @@ import com.example.ui.viewmodel.GameUiStatus
 import com.example.ui.viewmodel.GameViewModel
 import com.example.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
+
+import android.widget.Toast
+import com.example.config.LegalConfig
+import com.example.ui.screens.consent.ConsentScreen
 
 fun routeToMusic(route: String?, gameStatus: GameUiStatus? = null): MusicTrack? {
     return when (route) {
@@ -85,6 +92,8 @@ fun MemoryQuestNavGraph(
     val darkMode by mainViewModel.darkMode.collectAsStateWithLifecycle()
 
     val gameState by gameViewModel.uiState.collectAsStateWithLifecycle()
+    val userConsentState by mainViewModel.userConsentState.collectAsStateWithLifecycle()
+    val usernameEligibility by mainViewModel.usernameEligibility.collectAsStateWithLifecycle()
 
     val scope = rememberCoroutineScope()
     val avatarRepository = remember(context) {
@@ -121,6 +130,17 @@ fun MemoryQuestNavGraph(
         } else {
             mainViewModel.audioManager.playMusic(requestedTrack)
         }
+    }
+
+    // Mandatory Privacy & Terms Consent Gate
+    val isConsentValid = userConsentState?.isValid(LegalConfig.TERMS_VERSION, LegalConfig.PRIVACY_VERSION) == true
+    if (userConsentState != null && !isConsentValid) {
+        ConsentScreen(
+            onAccept = {
+                mainViewModel.acceptConsent()
+            }
+        )
+        return
     }
 
     // Onboarding check: if player != null and name is empty or NOT_SELECTED
@@ -209,6 +229,10 @@ fun MemoryQuestNavGraph(
                 unlockedThemes = unlockedThemes,
                 rankingDisplay = rankingDisplay,
                 usernameUiState = usernameUiState,
+                usernameEligibility = usernameEligibility,
+                onCheckEligibility = { callback ->
+                    mainViewModel.checkUsernameChangeEligibility(callback)
+                },
                 onNameInputChange = { input, isOnline ->
                     mainViewModel.onUsernameInputChanged(input, isOnline)
                 },
@@ -239,7 +263,8 @@ fun MemoryQuestNavGraph(
                 onBackClick = {
                     mainViewModel.audioManager.playButton()
                     navController.popBackStack()
-                }
+                },
+                isAdsRemoved = isAdsRemoved
             )
         }
 
@@ -252,10 +277,22 @@ fun MemoryQuestNavGraph(
                 onUseHint = { gameViewModel.useHint() },
                 onRevealPair = { gameViewModel.useRevealPair() },
                 onFreezeTimer = { gameViewModel.freezeTimer() },
-                onNextLevel = { gameViewModel.nextLevel() },
-                onRestartLevel = { gameViewModel.restartLevel() },
+                onNextLevel = {
+                    mainViewModel.showInterstitialAd(context.findActivity()) {
+                        gameViewModel.nextLevel()
+                    }
+                },
+                onRestartLevel = {
+                    mainViewModel.showInterstitialAd(context.findActivity()) {
+                        gameViewModel.restartLevel()
+                    }
+                },
                 onGoToShop = { navController.navigate(Screen.Shop.route) },
-                onBackToHome = { navController.popBackStack(Screen.Home.route, false) },
+                onBackToHome = {
+                    mainViewModel.showInterstitialAd(context.findActivity()) {
+                        navController.popBackStack(Screen.Home.route, false)
+                    }
+                },
                 onAppBackgrounded = { gameViewModel.onAppBackgrounded() },
                 isAdsRemoved = isAdsRemoved
             )
@@ -299,7 +336,9 @@ fun MemoryQuestNavGraph(
                 onBackClick = {
                     mainViewModel.audioManager.playButton()
                     navController.popBackStack()
-                }
+                },
+                isAdsRemoved = isAdsRemoved,
+                consentState = userConsentState
             )
         }
 
@@ -314,7 +353,8 @@ fun MemoryQuestNavGraph(
                 onBackClick = {
                     mainViewModel.audioManager.playButton()
                     navController.popBackStack()
-                }
+                },
+                isAdsRemoved = isAdsRemoved
             )
         }
 
@@ -346,7 +386,8 @@ fun MemoryQuestNavGraph(
             AchievementsScreen(
                 player = player,
                 achievements = achievements,
-                onBackClick = { navController.popBackStack() }
+                onBackClick = { navController.popBackStack() },
+                isAdsRemoved = isAdsRemoved
             )
         }
     }
@@ -380,4 +421,13 @@ fun MemoryQuestNavGraph(
             onCancel = { croppingUri = null }
         )
     }
+}
+
+private fun Context.findActivity(): Activity? {
+    var currentContext = this
+    while (currentContext is ContextWrapper) {
+        if (currentContext is Activity) return currentContext
+        currentContext = currentContext.baseContext
+    }
+    return null
 }

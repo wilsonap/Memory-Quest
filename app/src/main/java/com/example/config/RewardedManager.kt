@@ -23,37 +23,39 @@ class RewardedManager(
         if (isLoading || rewardedAd != null) return
         isLoading = true
 
-        if (BuildConfig.DEBUG) {
-            Log.d(TAG, "[DEBUG LOG] Solicitando Rewarded ($adUnitId)...")
-        }
-
-        RewardedAd.load(
-            context,
-            adUnitId,
-            AdRequest.Builder().build(),
-            object : RewardedAdLoadCallback() {
-                override fun onAdLoaded(ad: RewardedAd) {
-                    rewardedAd = ad
-                    isLoading = false
-                    if (BuildConfig.DEBUG) {
-                        Log.d(TAG, "[DEBUG LOG] Rewarded ad carregado com sucesso.")
-                    }
-                    onAdLoaded?.invoke()
-                }
-
-                override fun onAdFailedToLoad(loadAdError: LoadAdError) {
-                    rewardedAd = null
-                    isLoading = false
-                    if (BuildConfig.DEBUG) {
-                        Log.w(
-                            TAG,
-                            "[DEBUG LOG] Falha ao carregar Rewarded - Code: ${loadAdError.code}, Message: ${loadAdError.message}"
-                        )
-                    }
-                    onAdFailed?.invoke()
-                }
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "[DEBUG LOG] Solicitando Rewarded ($adUnitId)...")
             }
-        )
+
+            RewardedAd.load(
+                context,
+                adUnitId,
+                AdRequest.Builder().build(),
+                object : RewardedAdLoadCallback() {
+                    override fun onAdLoaded(ad: RewardedAd) {
+                        rewardedAd = ad
+                        isLoading = false
+                        if (BuildConfig.DEBUG) {
+                            Log.d(TAG, "[DEBUG LOG] Rewarded ad carregado com sucesso.")
+                        }
+                        onAdLoaded?.invoke()
+                    }
+
+                    override fun onAdFailedToLoad(loadAdError: LoadAdError) {
+                        rewardedAd = null
+                        isLoading = false
+                        if (BuildConfig.DEBUG) {
+                            Log.w(
+                                TAG,
+                                "[DEBUG LOG] Falha ao carregar Rewarded - Code: ${loadAdError.code}, Message: ${loadAdError.message}"
+                            )
+                        }
+                        onAdFailed?.invoke()
+                    }
+                }
+            )
+        }
     }
 
     fun show(activity: Activity, onUserEarnedReward: (amount: Int, type: String) -> Unit, onAdDismissed: () -> Unit = {}) {

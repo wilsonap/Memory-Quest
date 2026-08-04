@@ -41,6 +41,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -67,6 +68,7 @@ import com.example.avatar.ui.AvatarImage
 import com.example.data.local.entity.PlayerEntity
 import com.example.data.local.entity.StatisticsEntity
 import com.example.data.repository.LeaderboardPlayer
+import com.example.ui.components.BannerAdContainer
 import com.example.ui.components.BannerAdView
 import com.example.ui.components.TopGameBar
 import com.example.ui.theme.ImmersiveBg
@@ -126,12 +128,18 @@ fun RankingScreen(
         leaderboardList.distinctBy { it.uid }.filterNot { it.isCurrentUser }
     }
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(ImmersiveBg)
-    ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+    Scaffold(
+        containerColor = ImmersiveBg,
+        bottomBar = {
+            BannerAdContainer(isAdsRemoved = isAdsRemoved)
+        },
+        modifier = modifier.fillMaxSize()
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
             // Header bar
             TopGameBar(
                 coins = player?.coins ?: 0,
@@ -228,8 +236,6 @@ fun RankingScreen(
                     ComingSoonTab(tabName = "Mensal")
                 }
             }
-
-            BannerAdView(isAdsRemoved = isAdsRemoved)
         }
     }
 }
@@ -553,7 +559,7 @@ private fun Top100List(
     player: PlayerEntity?
 ) {
     LazyColumn(
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 20.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
         modifier = Modifier.fillMaxSize()
     ) {

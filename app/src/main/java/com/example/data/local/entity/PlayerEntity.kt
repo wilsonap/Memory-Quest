@@ -13,7 +13,7 @@ data class PlayerEntity(
     val firstGameDate: Long = System.currentTimeMillis(),
     val lastAccessDate: Long = System.currentTimeMillis(),
     val remainingHints: Int = 3,
-    val extraLives: Int = 2,
+    val extraLives: Int = 0,
     val equippedThemeId: String = "animals",
     val equippedFrameId: String = "classic",
     val usernameStatus: String = "NOT_SELECTED",
@@ -25,4 +25,8 @@ data class PlayerEntity(
     val avatarPresetId: String = "avatar_01",
     val avatarLocalPath: String = "",
     val avatarUpdatedAt: Long = System.currentTimeMillis()
-)
+) {
+    val bonusLives: Int get() = extraLives
+    val defaultLives: Int get() = 3
+    val totalLives: Int get() = defaultLives + bonusLives
+}

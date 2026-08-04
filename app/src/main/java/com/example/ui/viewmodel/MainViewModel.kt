@@ -1,7 +1,10 @@
 package com.example.ui.viewmodel
 
+import android.app.Activity
 import android.app.Application
 import android.util.Log
+import com.example.config.AdMobConfig
+import com.example.config.InterstitialManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.local.AppDatabase
@@ -28,8 +31,10 @@ import com.example.audio.GameAudioManager
 import com.example.audio.SoundEffect
 import com.example.data.model.UsernameStatus
 import com.example.data.model.UsernameUiState
+import com.example.data.repository.UsernameChangeEligibility
 import com.example.data.repository.UsernameRepository
 import com.example.data.repository.UsernameReservationResult
+import com.example.data.repository.UsernameSettingsRepository
 import com.example.sync.ConnectivityObserver
 import com.example.sync.EnsureLeaderboardWorker
 import com.example.sync.ValidatePendingUsernameWorker
@@ -41,6 +46,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 
+import com.example.config.LegalConfig
+import com.example.data.model.UserConsentState
+import com.example.data.repository.ConsentRepository
+import com.example.sync.ConsentSyncWorker
+
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val db = AppDatabase.getDatabase(application)
@@ -48,7 +58,35 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val repository = GameRepository(db.memoryQuestDao(), dataStore)
     val leaderboardRepository = LeaderboardRepository()
     val usernameRepository = UsernameRepository(db.memoryQuestDao(), leaderboardRepository)
+    val usernameSettingsRepository = UsernameSettingsRepository(dataStore)
+    val consentRepository = ConsentRepository(dataStore)
     val audioManager = GameAudioManager.getInstance(application)
+    val interstitialManager = InterstitialManager(application)
+
+    init {
+        interstitialManager.loadAd()
+    }
+
+    fun showInterstitialAd(activity: Activity?, onAdDismissed: () -> Unit) {
+        if (isAdsRemoved.value || !AdMobConfig.ADS_ENABLED) {
+            onAdDismissed()
+            return
+        }
+        if (activity != null) {
+            interstitialManager.show(activity, onAdDismissed)
+        } else {
+            onAdDismissed()
+        }
+    }
+
+    private val _usernameEligibility = MutableStateFlow<UsernameChangeEligibility>(UsernameChangeEligibility.Allowed)
+    val usernameEligibility: StateFlow<UsernameChangeEligibility> = _usernameEligibility.asStateFlow()
+
+    val userConsentState: StateFlow<UserConsentState?> = consentRepository.userConsentState.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = null
+    )
 
     private val _usernameUiState = MutableStateFlow(UsernameUiState())
     val usernameUiState: StateFlow<UsernameUiState> = _usernameUiState.asStateFlow()
@@ -149,6 +187,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             leaderboardRepository.ensureAuthenticated()
 
             val isOnline = ConnectivityObserver(context) {}.isNetworkAvailable()
+
+            if (isOnline) {
+                // Tenta restaurar dados do usuário do Firestore caso o banco local tenha sido resetado
+                leaderboardRepository.restoreUserDataFromFirestoreIfAvailable(db.memoryQuestDao())
+            }
+
             val player = repository.playerFlow.firstOrNull()
             val stats = repository.statisticsFlow.firstOrNull()
 
@@ -409,6 +453,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun checkUsernameChangeEligibility(onResult: (UsernameChangeEligibility) -> Unit = {}) {
+        viewModelScope.launch {
+            val uid = leaderboardRepository.ensureAuthenticated() ?: ""
+            val online = isOnline.value
+            val result = usernameSettingsRepository.checkUsernameChangeEligibility(uid, online)
+            _usernameEligibility.value = result
+            onResult(result)
+        }
+    }
+
     fun reserveUsername(displayName: String, isOnline: Boolean, onResult: (UsernameReservationResult) -> Unit) {
         viewModelScope.launch {
             val result = usernameRepository.reserveUsername(displayName, isOnline)
@@ -418,6 +472,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             onResult(result)
             if (result is UsernameReservationResult.Success || result is UsernameReservationResult.PendingOffline) {
                 loadLeaderboard()
+                checkUsernameChangeEligibility()
             }
         }
     }
@@ -467,7 +522,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (player.coins >= price) {
                 repository.addCoins(-price)
                 when (boosterId) {
-                    "booster_life" -> repository.addExtraLives(1)
+                    "booster_life" -> repository.addExtraLives(3)
                     "booster_hint" -> repository.addHints(3)
                     else -> {}
                 }
@@ -508,6 +563,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun resetSettings() {
         viewModelScope.launch { repository.resetDataStore() }
+    }
+
+    fun acceptConsent(onResult: (syncedOnline: Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val syncedOnline = consentRepository.recordConsent()
+            if (!syncedOnline) {
+                ConsentSyncWorker.schedule(getApplication())
+            }
+            onResult(syncedOnline)
+        }
     }
 
     fun resetGameProgress() {

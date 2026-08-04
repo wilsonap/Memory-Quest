@@ -43,14 +43,34 @@ import com.example.ui.theme.ImmersiveSurfaceVariant
 import com.example.ui.theme.ImmersiveTextPrimary
 import com.example.ui.theme.ImmersiveTextSecondary
 
+import com.example.data.repository.UsernameChangeEligibility
+
 @Composable
 fun ActionButtons(
     onEditNameClick: () -> Unit,
     onEditAvatarClick: () -> Unit,
     onShareClick: () -> Unit,
     onViewStatsClick: () -> Unit,
+    usernameEligibility: UsernameChangeEligibility = UsernameChangeEligibility.Allowed,
     modifier: Modifier = Modifier
 ) {
+    val editNameSubtitle = when (usernameEligibility) {
+        is UsernameChangeEligibility.Cooldown -> {
+            if (usernameEligibility.remainingDays > 0) {
+                stringResource(R.string.username_change_status_cooldown_days, usernameEligibility.remainingDays)
+            } else if (usernameEligibility.remainingHours > 0) {
+                stringResource(R.string.username_change_status_cooldown_hours, usernameEligibility.remainingHours)
+            } else {
+                stringResource(R.string.username_change_status_cooldown_minutes, usernameEligibility.remainingMinutes.coerceAtLeast(1))
+            }
+        }
+        is UsernameChangeEligibility.Offline -> stringResource(R.string.username_change_offline_error)
+        is UsernameChangeEligibility.Unauthenticated -> stringResource(R.string.username_change_unauthenticated_error)
+        is UsernameChangeEligibility.FirestoreUnavailable -> stringResource(R.string.username_change_firestore_unavailable_error)
+        is UsernameChangeEligibility.PermissionDenied -> stringResource(R.string.username_change_permission_denied_error, usernameEligibility.docPath)
+        else -> stringResource(R.string.username_change_status_allowed)
+    }
+
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = "AÇÕES DO PERFIL",
@@ -68,6 +88,7 @@ fun ActionButtons(
         ) {
             ProfileActionButton(
                 label = stringResource(R.string.profile_edit_name),
+                subtitle = editNameSubtitle,
                 icon = Icons.Default.Edit,
                 onClick = onEditNameClick,
                 testTag = "action_edit_name"
@@ -102,7 +123,8 @@ private fun ProfileActionButton(
     label: String,
     icon: ImageVector,
     onClick: () -> Unit,
-    testTag: String
+    testTag: String,
+    subtitle: String? = null
 ) {
     Surface(
         color = ImmersiveSurface,
@@ -136,14 +158,26 @@ private fun ProfileActionButton(
 
                 Spacer(modifier = Modifier.width(14.dp))
 
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = ImmersiveTextPrimary,
-                        fontSize = 15.sp
+                Column {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = ImmersiveTextPrimary,
+                            fontSize = 15.sp
+                        )
                     )
-                )
+                    if (!subtitle.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = subtitle,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = ImmersiveTextSecondary,
+                                fontSize = 12.sp
+                            )
+                        )
+                    }
+                }
             }
 
             Icon(

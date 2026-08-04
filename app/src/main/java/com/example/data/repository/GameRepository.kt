@@ -43,7 +43,7 @@ class GameRepository(
                 firstGameDate = System.currentTimeMillis(),
                 lastAccessDate = System.currentTimeMillis(),
                 remainingHints = 3,
-                extraLives = 2,
+                extraLives = 0,
                 equippedThemeId = GameTheme.ANIMALS.id,
                 equippedFrameId = "frame_classic"
             )
@@ -238,6 +238,10 @@ class GameRepository(
         dao.addExtraLives(amount)
     }
 
+    suspend fun setExtraLives(count: Int) {
+        dao.setExtraLives(count)
+    }
+
     suspend fun resetGameProgress() {
         val player = dao.getPlayer()
         if (player != null) {
@@ -246,7 +250,7 @@ class GameRepository(
                 currentLevel = 1,
                 highestLevel = 1,
                 remainingHints = 3,
-                extraLives = 2
+                extraLives = 0
             )
             dao.insertOrUpdatePlayer(resetPlayer)
 

@@ -72,14 +72,16 @@ class BannerManager(
     }
 
     fun loadAd() {
-        try {
-            if (BuildConfig.DEBUG) {
-                Log.d(TAG, "[DEBUG LOG] Carregando AdRequest para $adUnitId...")
-            }
-            adView?.loadAd(AdRequest.Builder().build())
-        } catch (e: Exception) {
-            if (BuildConfig.DEBUG) {
-                Log.e(TAG, "[DEBUG LOG] Exceção ao carregar AdMob banner: ${e.message}", e)
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            try {
+                if (BuildConfig.DEBUG) {
+                    Log.d(TAG, "[DEBUG LOG] Carregando AdRequest para $adUnitId...")
+                }
+                adView?.loadAd(AdRequest.Builder().build())
+            } catch (e: Exception) {
+                if (BuildConfig.DEBUG) {
+                    Log.e(TAG, "[DEBUG LOG] Exceção ao carregar AdMob banner: ${e.message}", e)
+                }
             }
         }
     }

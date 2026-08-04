@@ -10,7 +10,6 @@ import com.example.util.UsernameValidator
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
-import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
 
 sealed class UsernameReservationResult {
@@ -18,7 +17,15 @@ sealed class UsernameReservationResult {
     data class Taken(val availableSuggestions: List<String>) : UsernameReservationResult()
     object PendingOffline : UsernameReservationResult()
     data class Error(val message: String) : UsernameReservationResult()
+    data class Cooldown(
+        val remainingDays: Int,
+        val remainingHours: Int,
+        val remainingMinutes: Int
+    ) : UsernameReservationResult()
 }
+
+class NameTakenException : Exception("NAME_TAKEN")
+class NameCooldownException(val remainingMs: Long) : Exception("NAME_COOLDOWN")
 
 class UsernameRepository(
     private val memoryQuestDao: MemoryQuestDao,
@@ -81,7 +88,7 @@ class UsernameRepository(
     }
 
     /**
-     * Reserves a username online via Firestore transaction or saves provisionally offline.
+     * Reserves or changes a username online via Firestore transaction or saves provisionally offline.
      */
     suspend fun reserveUsername(
         displayName: String,
@@ -93,156 +100,185 @@ class UsernameRepository(
             return UsernameReservationResult.Error("Formato de nome inválido")
         }
 
-        val normalizedName = UsernameNormalizer.normalizeUsername(displayName)
+        val newDisplayName = displayName.trim()
+        val newNormalizedName = UsernameNormalizer.normalizeUsername(newDisplayName)
         val player = memoryQuestDao.getPlayer() ?: PlayerEntity()
 
-        Log.d(LOG_TAG, "Iniciando reserva de username. Nome digitado: '$displayName', Normalizado: '$normalizedName', Conexão online: $isOnline")
+        val oldNormalizedName = player.confirmedNormalizedName.ifEmpty {
+            player.pendingNormalizedName.ifEmpty {
+                UsernameNormalizer.normalizeUsername(player.name)
+            }
+        }
+
+        Log.d(LOG_TAG, "Iniciando alteração de username. Novo: '$newDisplayName' ($newNormalizedName), Antigo: '$oldNormalizedName', Online: $isOnline")
 
         if (!isOnline) {
-            // OFFLINE FLOW: Save provisional name and set PENDING_VALIDATION
             val updatedPlayer = player.copy(
-                name = displayName,
-                pendingDisplayName = displayName,
-                pendingNormalizedName = normalizedName,
+                name = newDisplayName,
+                pendingDisplayName = newDisplayName,
+                pendingNormalizedName = newNormalizedName,
                 usernameStatus = UsernameStatus.PENDING_VALIDATION.name
             )
             memoryQuestDao.insertOrUpdatePlayer(updatedPlayer)
-            Log.d(LOG_TAG, "OFFLINE: Salvo nome provisório '$displayName' ($normalizedName). Mudança de status para PENDING_VALIDATION")
+            Log.d(LOG_TAG, "OFFLINE: Salvo nome provisório '$newDisplayName' ($newNormalizedName)")
             return UsernameReservationResult.PendingOffline
         }
 
         // ONLINE FLOW
-        // 1. Autenticar
+        // Rule 10: Não executar signOut() ou signInAnonymously() se já autenticado
+        Log.d(LOG_TAG, "[RESERVATION] Etapa 1: Verificação de internet -> isOnline=$isOnline")
+        Log.d(LOG_TAG, "[RESERVATION] Etapa 2: Verificação do FirebaseAuth")
         val uid = leaderboardRepository.ensureAuthenticated()
-        Log.d(LOG_TAG, "UID autenticado: $uid")
+        Log.d(LOG_TAG, "[RESERVATION] UID autenticado: $uid")
         if (uid.isNullOrEmpty()) {
-            Log.e(LOG_TAG, "Erro de autenticação: UID retornado é nulo")
-            val pendingPlayer = player.copy(
-                name = displayName,
-                pendingDisplayName = displayName,
-                pendingNormalizedName = normalizedName,
-                usernameStatus = UsernameStatus.PENDING_VALIDATION.name
-            )
-            memoryQuestDao.insertOrUpdatePlayer(pendingPlayer)
-            return UsernameReservationResult.Error("Erro na autenticação com o servidor")
+            Log.e(LOG_TAG, "[RESERVATION] MOTIVO DO BLOQUEIO: Usuário não autenticado no FirebaseAuth (UID nulo)")
+            return UsernameReservationResult.Error("Sua sessão expirou. Faça login novamente.")
         }
 
-        // 2. Transação no Firestore
-        Log.d(LOG_TAG, "Início da transação no Firestore para o documento: usernames/$normalizedName")
+        // Document references for transaction
+        val oldUsernameRef = if (oldNormalizedName.isNotEmpty()) {
+            firestore.collection("usernames").document(oldNormalizedName)
+        } else null
+
+        val newUsernameRef = firestore.collection("usernames").document(newNormalizedName)
+        val leaderboardRef = firestore.collection("leaderboard").document(uid)
+        val usernameSettingsRef = firestore.collection("username_settings").document(uid)
+
+        val isNameChange = oldNormalizedName.isNotEmpty() && oldNormalizedName != newNormalizedName
 
         return try {
-            val usernameRef = firestore.collection("usernames").document(normalizedName)
-            var isConflict = false
-
+            // Rule 1: Executar uma única transação online
             firestore.runTransaction { transaction ->
-                val snapshot = transaction.get(usernameRef)
-                if (snapshot.exists()) {
-                    val existingUid = snapshot.getString("uid")
-                    if (existingUid != uid) {
-                        Log.d(LOG_TAG, "Conflito na transação: usernames/$normalizedName já pertence ao UID $existingUid (atual: $uid)")
-                        isConflict = true
-                        return@runTransaction
+                // Rule 2: Fazer TODAS as leituras antes de TODAS as gravações
+                Log.d(LOG_TAG, "[RESERVATION] Etapa 3: Leitura de username_settings/$uid")
+                val usernameSettingsDoc = transaction.get(usernameSettingsRef)
+
+                Log.d(LOG_TAG, "[RESERVATION] Etapa 4: Leitura de usernames/$newNormalizedName")
+                val oldUsernameDoc = oldUsernameRef?.let { transaction.get(it) }
+                val newUsernameDoc = transaction.get(newUsernameRef)
+
+                Log.d(LOG_TAG, "[RESERVATION] Etapa 5: Leitura de leaderboard/$uid")
+                val leaderboardDoc = transaction.get(leaderboardRef)
+
+                // Etapa 6: Validação do limite de 7 dias se for uma alteração de nome
+                Log.d(LOG_TAG, "[RESERVATION] Etapa 6: Verificação do prazo de 7 dias")
+                if (isNameChange && usernameSettingsDoc.exists()) {
+                    val lastChangeAt = usernameSettingsDoc.getTimestamp("lastUsernameChangeAt")
+                    if (lastChangeAt != null) {
+                        val lastMs = lastChangeAt.toDate().time
+                        val nextAvailableMs = lastMs + (7 * 24 * 60 * 60 * 1000L)
+                        val nowMs = System.currentTimeMillis()
+                        if (nowMs < nextAvailableMs) {
+                            Log.w(LOG_TAG, "[RESERVATION] MOTIVO DO BLOQUEIO: Limite de 7 dias não atingido")
+                            throw NameCooldownException(nextAvailableMs - nowMs)
+                        }
                     }
                 }
 
-                val usernameData = hashMapOf(
-                    "uid" to uid,
-                    "displayName" to displayName,
-                    "normalizedName" to normalizedName,
-                    "createdAt" to FieldValue.serverTimestamp()
-                )
-                transaction.set(usernameRef, usernameData, SetOptions.merge())
+                // Rule 3, 4, 5: Verificar e criar/manter/cancelar o novo username
+                if (!newUsernameDoc.exists()) {
+                    // Rule 3: Se o novo username não existir: criar exatamente com:
+                    // uid, displayName, normalizedName, createdAt = FieldValue.serverTimestamp()
+                    val newUsernameData = hashMapOf<String, Any>(
+                        "uid" to uid,
+                        "displayName" to newDisplayName,
+                        "normalizedName" to newNormalizedName,
+                        "createdAt" to FieldValue.serverTimestamp()
+                    )
+                    transaction.set(newUsernameRef, newUsernameData)
+                } else {
+                    val ownerUid = newUsernameDoc.getString("uid")
+                    if (ownerUid == uid) {
+                        // Rule 4: Se o novo username já existir e pertencer ao UID atual: não executar set() nele.
+                    } else {
+                        // Rule 5: Se pertencer a outro UID: cancelar como NAME_TAKEN.
+                        Log.w(LOG_TAG, "[RESERVATION] MOTIVO DO BLOQUEIO: Nome '$newDisplayName' ($newNormalizedName) já pertence a outro UID '$ownerUid'")
+                        throw NameTakenException()
+                    }
+                }
+
+                // Rule 6: Atualizar o leaderboard usando transaction.update()
+                if (leaderboardDoc.exists()) {
+                    transaction.update(
+                        leaderboardRef,
+                        mapOf(
+                            "name" to newDisplayName,
+                            "normalizedName" to newNormalizedName,
+                            "updatedAt" to FieldValue.serverTimestamp()
+                        )
+                    )
+                }
+
+                // Rule 7: Excluir usernames/{oldNormalizedName}
+                if (oldNormalizedName.isNotEmpty() && oldNormalizedName != newNormalizedName) {
+                    if (oldUsernameDoc != null && oldUsernameDoc.exists()) {
+                        val oldUid = oldUsernameDoc.getString("uid")
+                        if (oldUid == uid) {
+                            transaction.delete(oldUsernameRef!!)
+                        }
+                    }
+                }
+
+                // Atualizar / Criar controle em username_settings/{uid}
+                if (!usernameSettingsDoc.exists()) {
+                    val settingsData = hashMapOf<String, Any?>(
+                        "uid" to uid,
+                        "lastUsernameChangeAt" to if (isNameChange) FieldValue.serverTimestamp() else null,
+                        "createdAt" to FieldValue.serverTimestamp(),
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                    transaction.set(usernameSettingsRef, settingsData)
+                } else if (isNameChange) {
+                    val settingsUpdate = hashMapOf<String, Any>(
+                        "lastUsernameChangeAt" to FieldValue.serverTimestamp(),
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                    transaction.update(usernameSettingsRef, settingsUpdate)
+                }
             }.await()
 
-            if (isConflict) {
-                Log.d(LOG_TAG, "Conflito confirmado na reserva do nome '$displayName'")
-                val suggestions = getAvailableSuggestionsOnline(displayName, uid)
-                UsernameReservationResult.Taken(suggestions)
-            } else {
-                Log.d(LOG_TAG, "Sucesso na transação da coleção usernames/$normalizedName")
+            // Rule 9: Atualizar DataStore/Room local e interface somente depois do commit bem-sucedido.
+            val confirmedPlayer = player.copy(
+                name = newDisplayName,
+                confirmedDisplayName = newDisplayName,
+                confirmedNormalizedName = newNormalizedName,
+                pendingDisplayName = "",
+                pendingNormalizedName = "",
+                usernameStatus = UsernameStatus.CONFIRMED.name
+            )
+            memoryQuestDao.insertOrUpdatePlayer(confirmedPlayer)
+            Log.d(LOG_TAG, "Alteração concluída com sucesso. Player atualizado para CONFIRMED com nome '$newDisplayName'")
 
-                // Deletar reserva antiga se o nome confirmado mudou
-                val oldNormalized = player.confirmedNormalizedName
-                if (oldNormalized.isNotEmpty() && oldNormalized != normalizedName) {
-                    try {
-                        firestore.collection("usernames").document(oldNormalized).delete().await()
-                        Log.d(LOG_TAG, "Antiga reserva 'usernames/$oldNormalized' excluída com sucesso")
-                    } catch (e: Exception) {
-                        Log.w(LOG_TAG, "Erro ao excluir reserva antiga 'usernames/$oldNormalized': ${e.message}")
-                    }
-                }
+            val stats = memoryQuestDao.getStatistics()
+            leaderboardRepository.ensureLeaderboardExists(confirmedPlayer, stats)
 
-                // 3. Marcar CONFIRMED e salvar
-                val confirmedPlayer = player.copy(
-                    name = displayName,
-                    confirmedDisplayName = displayName,
-                    confirmedNormalizedName = normalizedName,
-                    pendingDisplayName = "",
-                    pendingNormalizedName = "",
-                    usernameStatus = UsernameStatus.CONFIRMED.name
-                )
-                memoryQuestDao.insertOrUpdatePlayer(confirmedPlayer)
-                Log.d(LOG_TAG, "Mudança de status para CONFIRMED. Player local atualizado com sucesso")
-
-                // 4. Criar ou atualizar leaderboard/{uid}
-                Log.d(LOG_TAG, "Criação do documento leaderboard/$uid")
-                val stats = memoryQuestDao.getStatistics()
-                leaderboardRepository.syncLeaderboard(confirmedPlayer, stats)
-
-                UsernameReservationResult.Success
-            }
+            UsernameReservationResult.Success
+        } catch (e: NameCooldownException) {
+            Log.w(LOG_TAG, "Alteração de nome bloqueada pelo limite de 7 dias (restam ${e.remainingMs} ms)")
+            val days = (e.remainingMs / (24 * 60 * 60 * 1000L)).toInt()
+            val hours = (e.remainingMs / (60 * 60 * 1000L)).toInt()
+            val minutes = (e.remainingMs / (60 * 1000L)).toInt()
+            UsernameReservationResult.Cooldown(days, hours, minutes)
+        } catch (e: NameTakenException) {
+            Log.w(LOG_TAG, "Nome '$newDisplayName' ($newNormalizedName) já pertence a outro UID")
+            val suggestions = getAvailableSuggestionsOnline(newDisplayName, uid)
+            UsernameReservationResult.Taken(suggestions)
         } catch (e: FirebaseFirestoreException) {
-            Log.e(LOG_TAG, "Código e mensagem de exceção Firestore: [${e.code}] ${e.message}", e)
-            when (e.code) {
-                FirebaseFirestoreException.Code.PERMISSION_DENIED -> {
-                    Log.e(LOG_TAG, "PERMISSÃO NEGADA: As regras do Firestore bloquearam a gravação em usernames/$normalizedName.")
-                    val pendingPlayer = player.copy(
-                        name = displayName,
-                        pendingDisplayName = displayName,
-                        pendingNormalizedName = normalizedName,
-                        usernameStatus = UsernameStatus.PENDING_VALIDATION.name
-                    )
-                    memoryQuestDao.insertOrUpdatePlayer(pendingPlayer)
-                    UsernameReservationResult.PendingOffline
-                }
-                FirebaseFirestoreException.Code.ALREADY_EXISTS -> {
-                    Log.d(LOG_TAG, "Tratando ALREADY_EXISTS como conflito de nome")
-                    val suggestions = getAvailableSuggestionsOnline(displayName, uid)
-                    UsernameReservationResult.Taken(suggestions)
-                }
-                FirebaseFirestoreException.Code.UNAVAILABLE -> {
-                    Log.w(LOG_TAG, "Servidor Firestore indisponível. Mantendo em PENDING_VALIDATION")
-                    val pendingPlayer = player.copy(
-                        name = displayName,
-                        pendingDisplayName = displayName,
-                        pendingNormalizedName = normalizedName,
-                        usernameStatus = UsernameStatus.PENDING_VALIDATION.name
-                    )
-                    memoryQuestDao.insertOrUpdatePlayer(pendingPlayer)
-                    UsernameReservationResult.PendingOffline
-                }
-                else -> {
-                    Log.e(LOG_TAG, "Exceção Firestore não tratada: ${e.message}", e)
-                    val pendingPlayer = player.copy(
-                        name = displayName,
-                        pendingDisplayName = displayName,
-                        pendingNormalizedName = normalizedName,
-                        usernameStatus = UsernameStatus.PENDING_VALIDATION.name
-                    )
-                    memoryQuestDao.insertOrUpdatePlayer(pendingPlayer)
-                    UsernameReservationResult.PendingOffline
-                }
+            Log.e(LOG_TAG, "[RESERVATION] Erro Firestore na alteração de nome: [${e.code}] ${e.message}", e)
+            if (e.code == FirebaseFirestoreException.Code.ALREADY_EXISTS) {
+                val suggestions = getAvailableSuggestionsOnline(newDisplayName, uid)
+                UsernameReservationResult.Taken(suggestions)
+            } else if (e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                val docPath = "usernames/$newNormalizedName"
+                Log.e(LOG_TAG, "[RESERVATION] MOTIVO DO BLOQUEIO: PERMISSION_DENIED no caminho $docPath. Mensagem: ${e.message}")
+                UsernameReservationResult.Error("Erro de permissão no servidor ($docPath).")
+            } else {
+                Log.e(LOG_TAG, "[RESERVATION] MOTIVO DO BLOQUEIO: Firestore indisponível (${e.code}).")
+                UsernameReservationResult.Error("Não foi possível conectar ao servidor.")
             }
         } catch (e: Exception) {
-            Log.e(LOG_TAG, "Exceção geral ao reservar username: ${e.message}", e)
-            val pendingPlayer = player.copy(
-                name = displayName,
-                pendingDisplayName = displayName,
-                pendingNormalizedName = normalizedName,
-                usernameStatus = UsernameStatus.PENDING_VALIDATION.name
-            )
-            memoryQuestDao.insertOrUpdatePlayer(pendingPlayer)
-            UsernameReservationResult.PendingOffline
+            Log.e(LOG_TAG, "[RESERVATION] MOTIVO DO BLOQUEIO: Exceção ao alterar username: ${e.message}", e)
+            UsernameReservationResult.Error("Não foi possível conectar ao servidor.")
         }
     }
 
@@ -256,7 +292,7 @@ class UsernameRepository(
             return true
         }
 
-        val pendingName = player.pendingDisplayName.ifEmpty { player.name }
+        val pendingName = player.pendingDisplayName.ifEmpty { player.name }.trim()
         val pendingNormalized = player.pendingNormalizedName.ifEmpty { UsernameNormalizer.normalizeUsername(pendingName) }
 
         if (pendingNormalized.isEmpty()) return true
@@ -264,80 +300,73 @@ class UsernameRepository(
         Log.d(LOG_TAG, "Iniciando validação pendente online para '$pendingName' ($pendingNormalized)")
 
         val uid = leaderboardRepository.ensureAuthenticated()
-        Log.d(LOG_TAG, "UID autenticado para validação pendente: $uid")
-        if (uid.isNullOrEmpty()) {
-            Log.e(LOG_TAG, "UID nulo na validação pendente")
-            return false
-        }
+        if (uid.isNullOrEmpty()) return false
 
-        Log.d(LOG_TAG, "Início da transação no Firestore para o documento: usernames/$pendingNormalized")
+        val oldNormalizedName = player.confirmedNormalizedName
+        val oldUsernameRef = if (oldNormalizedName.isNotEmpty()) firestore.collection("usernames").document(oldNormalizedName) else null
+        val newUsernameRef = firestore.collection("usernames").document(pendingNormalized)
+        val leaderboardRef = firestore.collection("leaderboard").document(uid)
 
         return try {
-            val usernameRef = firestore.collection("usernames").document(pendingNormalized)
-            var isConflict = false
-
             firestore.runTransaction { transaction ->
-                val snapshot = transaction.get(usernameRef)
-                if (snapshot.exists()) {
-                    val existingUid = snapshot.getString("uid")
-                    if (existingUid != uid) {
-                        Log.d(LOG_TAG, "Conflito na transação pendente: usernames/$pendingNormalized pertence a $existingUid (atual: $uid)")
-                        isConflict = true
-                        return@runTransaction
+                val oldUsernameDoc = oldUsernameRef?.let { transaction.get(it) }
+                val newUsernameDoc = transaction.get(newUsernameRef)
+                val leaderboardDoc = transaction.get(leaderboardRef)
+
+                if (!newUsernameDoc.exists()) {
+                    val newUsernameData = hashMapOf<String, Any>(
+                        "uid" to uid,
+                        "displayName" to pendingName,
+                        "normalizedName" to pendingNormalized,
+                        "createdAt" to FieldValue.serverTimestamp()
+                    )
+                    transaction.set(newUsernameRef, newUsernameData)
+                } else {
+                    val ownerUid = newUsernameDoc.getString("uid")
+                    if (ownerUid != uid) {
+                        throw NameTakenException()
                     }
                 }
 
-                val usernameData = hashMapOf(
-                    "uid" to uid,
-                    "displayName" to pendingName,
-                    "normalizedName" to pendingNormalized,
-                    "createdAt" to FieldValue.serverTimestamp()
-                )
-                transaction.set(usernameRef, usernameData, SetOptions.merge())
+                if (leaderboardDoc.exists()) {
+                    transaction.update(
+                        leaderboardRef,
+                        mapOf(
+                            "name" to pendingName,
+                            "normalizedName" to pendingNormalized,
+                            "updatedAt" to FieldValue.serverTimestamp()
+                        )
+                    )
+                }
+
+                if (oldNormalizedName.isNotEmpty() && oldNormalizedName != pendingNormalized) {
+                    if (oldUsernameDoc != null && oldUsernameDoc.exists()) {
+                        val oldUid = oldUsernameDoc.getString("uid")
+                        if (oldUid == uid) {
+                            transaction.delete(oldUsernameRef!!)
+                        }
+                    }
+                }
             }.await()
 
-            if (isConflict) {
-                Log.d(LOG_TAG, "Conflito na validação pendente do nome '$pendingName'. Mudança de status para CONFLICT")
-                val conflictPlayer = player.copy(
-                    usernameStatus = UsernameStatus.CONFLICT.name
-                )
-                memoryQuestDao.insertOrUpdatePlayer(conflictPlayer)
-                false
-            } else {
-                Log.d(LOG_TAG, "Sucesso na transação da coleção usernames/$pendingNormalized")
-                val confirmedPlayer = player.copy(
-                    name = pendingName,
-                    confirmedDisplayName = pendingName,
-                    confirmedNormalizedName = pendingNormalized,
-                    pendingDisplayName = "",
-                    pendingNormalizedName = "",
-                    usernameStatus = UsernameStatus.CONFIRMED.name
-                )
-                memoryQuestDao.insertOrUpdatePlayer(confirmedPlayer)
-                Log.d(LOG_TAG, "Mudança de status para CONFIRMED. Player local atualizado")
+            val confirmedPlayer = player.copy(
+                name = pendingName,
+                confirmedDisplayName = pendingName,
+                confirmedNormalizedName = pendingNormalized,
+                pendingDisplayName = "",
+                pendingNormalizedName = "",
+                usernameStatus = UsernameStatus.CONFIRMED.name
+            )
+            memoryQuestDao.insertOrUpdatePlayer(confirmedPlayer)
 
-                Log.d(LOG_TAG, "Criação do documento leaderboard/$uid")
-                val stats = memoryQuestDao.getStatistics()
-                leaderboardRepository.syncLeaderboard(confirmedPlayer, stats)
-                true
-            }
-        } catch (e: FirebaseFirestoreException) {
-            Log.e(LOG_TAG, "Código e mensagem de exceção Firestore na validação pendente: [${e.code}] ${e.message}", e)
-            when (e.code) {
-                FirebaseFirestoreException.Code.PERMISSION_DENIED -> {
-                    Log.e(LOG_TAG, "PERMISSÃO NEGADA: As regras do Firestore bloquearam a gravação em usernames/$pendingNormalized")
-                    false
-                }
-                FirebaseFirestoreException.Code.ALREADY_EXISTS -> {
-                    Log.d(LOG_TAG, "ALREADY_EXISTS na validação pendente, marcando como CONFLICT")
-                    val conflictPlayer = player.copy(usernameStatus = UsernameStatus.CONFLICT.name)
-                    memoryQuestDao.insertOrUpdatePlayer(conflictPlayer)
-                    false
-                }
-                else -> false
-            }
+            val stats = memoryQuestDao.getStatistics()
+            leaderboardRepository.ensureLeaderboardExists(confirmedPlayer, stats)
+            true
         } catch (e: Exception) {
-            Log.e(LOG_TAG, "Exceção ao validar username pendente online: ${e.message}", e)
+            if (e is NameTakenException) {
+                val conflictPlayer = player.copy(usernameStatus = UsernameStatus.CONFLICT.name)
+                memoryQuestDao.insertOrUpdatePlayer(conflictPlayer)
+            }
             false
         }
     }

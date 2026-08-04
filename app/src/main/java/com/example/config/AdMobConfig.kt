@@ -29,20 +29,20 @@ object AdMobConfig {
         get() = BuildConfig.DEBUG
 
     val appId: String
-        get() = if (isDebugMode) TEST_APP_ID else PROD_APP_ID
+        get() = if (isDebugMode || PROD_APP_ID.contains("0000000000")) TEST_APP_ID else PROD_APP_ID
 
     val bannerId: String
-        get() = if (isDebugMode) TEST_BANNER_ID else PROD_BANNER_ID
+        get() = if (isDebugMode || PROD_BANNER_ID.contains("0000000000")) TEST_BANNER_ID else PROD_BANNER_ID
 
     val interstitialId: String
-        get() = if (isDebugMode) TEST_INTERSTITIAL_ID else PROD_INTERSTITIAL_ID
+        get() = if (isDebugMode || PROD_INTERSTITIAL_ID.contains("0000000000")) TEST_INTERSTITIAL_ID else PROD_INTERSTITIAL_ID
 
     val rewardedId: String
-        get() = if (isDebugMode) TEST_REWARDED_ID else PROD_REWARDED_ID
+        get() = if (isDebugMode || PROD_REWARDED_ID.contains("0000000000")) TEST_REWARDED_ID else PROD_REWARDED_ID
 
     val rewardedInterstitialId: String
-        get() = if (isDebugMode) TEST_REWARDED_INTERSTITIAL_ID else PROD_REWARDED_INTERSTITIAL_ID
+        get() = if (isDebugMode || PROD_REWARDED_INTERSTITIAL_ID.contains("0000000000")) TEST_REWARDED_INTERSTITIAL_ID else PROD_REWARDED_INTERSTITIAL_ID
 
     val appOpenId: String
-        get() = if (isDebugMode) TEST_APP_OPEN_ID else PROD_APP_OPEN_ID
+        get() = if (isDebugMode || PROD_APP_OPEN_ID.contains("0000000000")) TEST_APP_OPEN_ID else PROD_APP_OPEN_ID
 }

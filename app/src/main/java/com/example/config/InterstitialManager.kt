@@ -23,38 +23,42 @@ class InterstitialManager(
         if (isLoading || interstitialAd != null) return
         isLoading = true
 
-        if (BuildConfig.DEBUG) {
-            Log.d(TAG, "[DEBUG LOG] Solicitando Interstitial ($adUnitId)...")
-        }
-
-        InterstitialAd.load(
-            context,
-            adUnitId,
-            AdRequest.Builder().build(),
-            object : InterstitialAdLoadCallback() {
-                override fun onAdLoaded(ad: InterstitialAd) {
-                    interstitialAd = ad
-                    isLoading = false
-                    if (BuildConfig.DEBUG) {
-                        Log.d(TAG, "[DEBUG LOG] Interstitial carregado com sucesso.")
-                    }
-                    onAdLoaded?.invoke()
-                }
-
-                override fun onAdFailedToLoad(loadAdError: LoadAdError) {
-                    interstitialAd = null
-                    isLoading = false
-                    if (BuildConfig.DEBUG) {
-                        Log.w(
-                            TAG,
-                            "[DEBUG LOG] Falha ao carregar Interstitial - Code: ${loadAdError.code}, Message: ${loadAdError.message}"
-                        )
-                    }
-                    onAdFailed?.invoke()
-                }
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "[DEBUG LOG] Solicitando Interstitial ($adUnitId)...")
             }
-        )
+
+            InterstitialAd.load(
+                context,
+                adUnitId,
+                AdRequest.Builder().build(),
+                object : InterstitialAdLoadCallback() {
+                    override fun onAdLoaded(ad: InterstitialAd) {
+                        interstitialAd = ad
+                        isLoading = false
+                        if (BuildConfig.DEBUG) {
+                            Log.d(TAG, "[DEBUG LOG] Interstitial carregado com sucesso.")
+                        }
+                        onAdLoaded?.invoke()
+                    }
+
+                    override fun onAdFailedToLoad(loadAdError: LoadAdError) {
+                        interstitialAd = null
+                        isLoading = false
+                        if (BuildConfig.DEBUG) {
+                            Log.w(
+                                TAG,
+                                "[DEBUG LOG] Falha ao carregar Interstitial - Code: ${loadAdError.code}, Message: ${loadAdError.message}"
+                            )
+                        }
+                        onAdFailed?.invoke()
+                    }
+                }
+            )
+        }
     }
+
+    fun isReady(): Boolean = interstitialAd != null
 
     fun show(activity: Activity, onAdDismissed: () -> Unit = {}) {
         val ad = interstitialAd
@@ -65,6 +69,7 @@ class InterstitialManager(
                     if (BuildConfig.DEBUG) {
                         Log.d(TAG, "[DEBUG LOG] Interstitial dispensado.")
                     }
+                    loadAd()
                     onAdDismissed()
                 }
 
@@ -73,6 +78,7 @@ class InterstitialManager(
                     if (BuildConfig.DEBUG) {
                         Log.w(TAG, "[DEBUG LOG] Erro ao exibir Interstitial: ${adError.message}")
                     }
+                    loadAd()
                     onAdDismissed()
                 }
 
@@ -85,8 +91,9 @@ class InterstitialManager(
             ad.show(activity)
         } else {
             if (BuildConfig.DEBUG) {
-                Log.d(TAG, "[DEBUG LOG] Interstitial não pronto para exibição.")
+                Log.d(TAG, "[DEBUG LOG] Interstitial não pronto para exibição. Carregando...")
             }
+            loadAd()
             onAdDismissed()
         }
     }

@@ -88,7 +88,7 @@ fun SummaryCards(
         ) {
             SummaryItemCard(
                 title = "Vidas",
-                value = "$lives / 3",
+                value = "$lives",
                 icon = Icons.Default.Favorite,
                 accentColor = Color(0xFFFF5252),
                 modifier = Modifier.weight(1f)

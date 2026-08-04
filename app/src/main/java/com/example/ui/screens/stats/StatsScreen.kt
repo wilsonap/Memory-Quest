@@ -32,9 +32,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material3.Scaffold
 import com.example.R
 import com.example.data.local.entity.PlayerEntity
 import com.example.data.local.entity.StatisticsEntity
+import com.example.ui.components.BannerAdContainer
 import com.example.ui.components.TopGameBar
 import com.example.ui.screens.profile.components.StatsGridSection
 import com.example.ui.theme.ImmersiveBg
@@ -51,17 +53,25 @@ fun StatsScreen(
     stats: StatisticsEntity?,
     onNavigateToProfile: () -> Unit = {},
     onBackClick: () -> Unit = {},
+    isAdsRemoved: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val playerName = player?.name?.ifEmpty { "Explorador" } ?: "Explorador"
     val level = player?.highestLevel ?: 1
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(ImmersiveBg)
-    ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+    Scaffold(
+        containerColor = ImmersiveBg,
+        bottomBar = {
+            BannerAdContainer(isAdsRemoved = isAdsRemoved)
+        },
+        modifier = modifier.fillMaxSize()
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
             // Header Top Bar
             TopGameBar(
                 coins = player?.coins ?: 0,
@@ -149,4 +159,5 @@ fun StatsScreen(
             }
         }
     }
+}
 }

@@ -154,6 +154,70 @@ class LeaderboardRepository(
         }
     }
 
+    suspend fun restoreUserDataFromFirestoreIfAvailable(
+        memoryQuestDao: com.example.data.local.dao.MemoryQuestDao
+    ): Boolean {
+        return try {
+            val uid = ensureAuthenticated() ?: return false
+            val leaderboardRef = firestore.collection("leaderboard").document(uid)
+            val snap = leaderboardRef.get().await()
+
+            if (!snap.exists()) {
+                Log.d(LOG_TAG, "Nenhum documento de leaderboard encontrado no Firestore para UID $uid para restaurar dados")
+                return false
+            }
+
+            val remoteName = snap.getString("name") ?: ""
+            val remoteNormalized = snap.getString("normalizedName") ?: UsernameNormalizer.normalizeUsername(remoteName)
+            val remoteAvatar = snap.getString("avatarValue") ?: snap.getString("avatar") ?: "avatar_01"
+            val remoteAvatarType = snap.getString("avatarType") ?: "PRESET"
+            val remoteHighestLevel = (snap.getLong("highestLevel") ?: 1L).toInt()
+            val remoteTotalPairs = (snap.getLong("totalPairs") ?: 0L).toInt()
+            val remoteBestStreak = (snap.getLong("bestStreak") ?: 0L).toInt()
+            val remoteGamesCompleted = (snap.getLong("gamesCompleted") ?: 0L).toInt()
+
+            val currentPlayer = memoryQuestDao.getPlayer() ?: PlayerEntity()
+            val currentStats = memoryQuestDao.getStatistics() ?: StatisticsEntity()
+
+            val needsRestore = currentPlayer.name.isEmpty() ||
+                    currentPlayer.confirmedDisplayName.isEmpty() ||
+                    currentPlayer.usernameStatus != UsernameStatus.CONFIRMED.name ||
+                    remoteHighestLevel > currentPlayer.highestLevel ||
+                    remoteTotalPairs > currentStats.totalPairsFound
+
+            if (needsRestore && remoteName.isNotEmpty()) {
+                Log.d(LOG_TAG, "Restaurando progresso do usuário do Firestore: nome='$remoteName', avatar='$remoteAvatar', nível=$remoteHighestLevel")
+
+                val restoredPlayer = currentPlayer.copy(
+                    name = remoteName,
+                    confirmedDisplayName = remoteName,
+                    confirmedNormalizedName = remoteNormalized,
+                    usernameStatus = UsernameStatus.CONFIRMED.name,
+                    highestLevel = maxOf(currentPlayer.highestLevel, remoteHighestLevel),
+                    currentLevel = maxOf(currentPlayer.currentLevel, remoteHighestLevel),
+                    avatarPresetId = remoteAvatar,
+                    avatarType = remoteAvatarType,
+                    avatarLocalPath = if (remoteAvatarType == "PRESET") "" else currentPlayer.avatarLocalPath
+                )
+                memoryQuestDao.insertOrUpdatePlayer(restoredPlayer)
+
+                val restoredStats = currentStats.copy(
+                    totalPairsFound = maxOf(currentStats.totalPairsFound, remoteTotalPairs),
+                    highestStreak = maxOf(currentStats.highestStreak, remoteBestStreak),
+                    totalGames = maxOf(currentStats.totalGames, remoteGamesCompleted)
+                )
+                memoryQuestDao.insertOrUpdateStatistics(restoredStats)
+
+                Log.d(LOG_TAG, "Restauração do Firestore concluída com sucesso!")
+                return true
+            }
+            false
+        } catch (e: Exception) {
+            Log.e(LOG_TAG, "Erro ao tentar restaurar dados do Firestore: ${e.message}", e)
+            false
+        }
+    }
+
     /**
      * Ensures an anonymous Firebase Auth user exists.
      * Reuses existing user UID if already authenticated.

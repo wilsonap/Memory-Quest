@@ -77,6 +77,7 @@ import com.example.audio.GameAudioManager
 import com.example.avatar.model.AvatarType
 import com.example.avatar.ui.AvatarImage
 import com.example.data.local.entity.PlayerEntity
+import com.example.ui.components.BannerAdContainer
 import com.example.ui.components.BannerAdView
 import com.example.ui.viewmodel.GameUiStatus
 import kotlinx.coroutines.delay
@@ -669,7 +670,7 @@ fun VictoryScreen(
                                 }
 
                                 Spacer(modifier = Modifier.height(12.dp))
-                                BannerAdView(isAdsRemoved = isAdsRemoved)
+                                BannerAdContainer(isAdsRemoved = isAdsRemoved)
                             }
                         }
                     }

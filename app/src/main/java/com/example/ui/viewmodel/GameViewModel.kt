@@ -113,7 +113,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             }
             rawCards.shuffle()
 
-            val startingLives = levelConfig.initialLives + (player?.extraLives ?: 0).coerceAtMost(2)
+            val defaultLives = levelConfig.initialLives
+            val bonusLives = player?.extraLives ?: 0
+            val startingLives = defaultLives + bonusLives
             val availableHints = player?.remainingHints ?: 3
 
             _uiState.value = GameState(
@@ -234,6 +236,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     val newLives = _uiState.value.lives - 1
                     val newErrors = _uiState.value.errorsCount + 1
 
+                    val levelConfig = LevelConfig.getConfigForLevel(_uiState.value.levelNumber)
+                    val defaultLives = levelConfig.initialLives
+                    val remainingExtraLives = maxOf(0, newLives - defaultLives)
+                    repository.setExtraLives(remainingExtraLives)
+
                     val resetCards = _uiState.value.cards.toMutableList()
                     resetCards[firstIdx] = firstCard.copy(isFaceUp = false)
                     resetCards[cardIndex] = secondCard.copy(isFaceUp = false)
@@ -350,6 +357,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         timerJob?.cancel()
         audioManager.playSfx(SoundEffect.GAME_OVER)
         viewModelScope.launch {
+            repository.setExtraLives(0)
             val state = _uiState.value
             _uiState.update { it.copy(status = GameUiStatus.Defeat(state.pairsFound, state.levelNumber)) }
 

@@ -41,6 +41,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
@@ -66,7 +67,14 @@ import androidx.compose.ui.unit.sp
 import com.example.BuildConfig
 import com.example.R
 import com.example.data.local.entity.PlayerEntity
+import com.example.ui.components.BannerAdContainer
 import com.example.ui.components.TopGameBar
+
+import com.example.config.LegalConfig
+import com.example.data.model.UserConsentState
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun SettingsScreen(
@@ -88,6 +96,8 @@ fun SettingsScreen(
     onResetDefaults: () -> Unit,
     onResetGameProgress: () -> Unit = {},
     onBackClick: () -> Unit,
+    isAdsRemoved: Boolean = false,
+    consentState: UserConsentState? = null,
     modifier: Modifier = Modifier
 ) {
     var showResetConfirmDialog by remember { mutableStateOf(false) }
@@ -139,7 +149,11 @@ fun SettingsScreen(
         )
     }
 
-    Box(
+    Scaffold(
+        containerColor = Color.Transparent,
+        bottomBar = {
+            BannerAdContainer(isAdsRemoved = isAdsRemoved)
+        },
         modifier = modifier
             .fillMaxSize()
             .background(
@@ -150,8 +164,12 @@ fun SettingsScreen(
                     )
                 )
             )
-    ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
             TopGameBar(
                 coins = player?.coins ?: 0,
                 title = stringResource(R.string.settings_title),
@@ -405,7 +423,7 @@ fun SettingsScreen(
                     }
                 }
 
-                // 3. INFORMAÇÕES E SUPORTE
+                // 3. LEGAL E PRIVACIDADE & SUPORTE
                 Surface(
                     color = MaterialTheme.colorScheme.surface,
                     shape = RoundedCornerShape(16.dp),
@@ -413,7 +431,7 @@ fun SettingsScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = "Informações e Suporte",
+                            text = stringResource(R.string.legal_and_privacy),
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.secondary
@@ -428,7 +446,7 @@ fun SettingsScreen(
                             title = stringResource(R.string.settings_privacy_policy),
                             onClick = {
                                 try {
-                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://memory.autocheckia.com.br/privacy"))
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(LegalConfig.PRIVACY_URL))
                                     context.startActivity(intent)
                                 } catch (e: Exception) {
                                     Toast.makeText(context, "Política de Privacidade: Todos os seus dados são guardados localmente no seu aparelho.", Toast.LENGTH_LONG).show()
@@ -444,7 +462,7 @@ fun SettingsScreen(
                             title = "Termos de Uso",
                             onClick = {
                                 try {
-                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://memory.autocheckia.com.br/terms"))
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(LegalConfig.TERMS_URL))
                                     context.startActivity(intent)
                                 } catch (e: Exception) {
                                     Toast.makeText(context, "Termos de Uso: Memory Quest é um jogo educativo de memória.", Toast.LENGTH_LONG).show()
@@ -476,6 +494,66 @@ fun SettingsScreen(
                             title = "Exclusão e Reinício de Dados",
                             onClick = { showResetConfirmDialog = true }
                         )
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
+
+                        // Detalhes do Consentimento
+                        val termsVer = consentState?.termsVersionAccepted?.ifEmpty { LegalConfig.TERMS_VERSION } ?: LegalConfig.TERMS_VERSION
+                        val privacyVer = consentState?.privacyVersionAccepted?.ifEmpty { LegalConfig.PRIVACY_VERSION } ?: LegalConfig.PRIVACY_VERSION
+                        val acceptedDateStr = if (consentState != null && consentState.acceptedAtLocal > 0L) {
+                            try {
+                                SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(consentState.acceptedAtLocal))
+                            } catch (e: Exception) {
+                                "-"
+                            }
+                        } else {
+                            "-"
+                        }
+                        val syncStatusStr = if (consentState?.consentSyncPending == true) {
+                            stringResource(R.string.consent_status_pending)
+                        } else {
+                            stringResource(R.string.consent_status_synced)
+                        }
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.consent_terms_version, termsVer),
+                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            )
+                            Text(
+                                text = stringResource(R.string.consent_privacy_version, privacyVer),
+                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            )
+                            Text(
+                                text = stringResource(R.string.consent_accepted_date, acceptedDateStr),
+                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            )
+                            Text(
+                                text = stringResource(R.string.consent_sync_status, syncStatusStr),
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (consentState?.consentSyncPending == true) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
+                                )
+                            )
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            Text(
+                                text = stringResource(R.string.consent_delete_data_info),
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                )
+                            )
+                        }
                     }
                 }
 

@@ -16,6 +16,14 @@
     <string name="settings_edit">Edit</string>
     <string name="settings_edit_name_title">Edit Player Name</string>
     <string name="settings_edit_name_subtitle">Enter your new name to display on ranking and profile.</string>
+    <string name="username_change_status_allowed">You can change your name.</string>
+    <string name="username_change_status_cooldown_days">Next change available in %1$d days.</string>
+    <string name="username_change_status_cooldown_hours">Next change available in %1$d hours.</string>
+    <string name="username_change_status_cooldown_minutes">Next change available in %1$d minutes.</string>
+    <string name="username_change_offline_error">Connect to the internet to change your username.</string>
+    <string name="username_change_cooldown_days_msg">You will be able to change your name again in %1$d days.</string>
+    <string name="username_change_cooldown_hours_msg">You will be able to change your name again in %1$d hours.</string>
+    <string name="username_change_cooldown_minutes_msg">You will be able to change your name again in %1$d minutes.</string>
 
     <!-- Preferences -->
     <string name="settings_audio_title">Audio &amp; Effects Preferences</string>
@@ -100,8 +108,8 @@
     <string name="shop_owned">Owned</string>
 
     <!-- Shop Items - Boosters -->
-    <string name="booster_life_title">❤️ Extra Life</string>
-    <string name="booster_life_desc">Start the next level with +1 extra life (Max +2 lives).</string>
+    <string name="booster_life_title">❤️ Extra Life (+3)</string>
+    <string name="booster_life_desc">Adds +3 accumulative extra lives to your total.</string>
     <string name="booster_hint_title">💡 Hint Pack (x3)</string>
     <string name="booster_hint_desc">Instantly highlight a matching pair of cards during the game.</string>
     <string name="booster_reveal_title">👀 Reveal Pair</string>
@@ -189,4 +197,22 @@
     <string name="username_suggestions_offline_title">Suggestions to try when online:</string>
     <string name="username_checking_availability">Checking availability...</string>
     <string name="username_available">Name available! ✓</string>
+
+    <!-- Privacy & Terms Consent -->
+    <string name="consent_title">Privacy and Terms</string>
+    <string name="consent_explanation">To continue using Memory Quest, please read and accept our Privacy Policy and Terms of Use.</string>
+    <string name="consent_read_privacy">Read Privacy Policy</string>
+    <string name="consent_read_terms">Read Terms of Use</string>
+    <string name="consent_checkbox">I have read and accept the Privacy Policy and Terms of Use.</string>
+    <string name="consent_accept_continue">Accept and continue</string>
+    <string name="consent_exit">Exit</string>
+    <string name="consent_offline_notice">Consent will be synced when connected.</string>
+    <string name="legal_and_privacy">Legal &amp; Privacy</string>
+    <string name="consent_terms_version">Terms Version: %1$s</string>
+    <string name="consent_privacy_version">Privacy Version: %1$s</string>
+    <string name="consent_accepted_date">Accepted on: %1$s</string>
+    <string name="consent_sync_status">Sync Status: %1$s</string>
+    <string name="consent_status_synced">Synced</string>
+    <string name="consent_status_pending">Pending (Offline)</string>
+    <string name="consent_delete_data_info">To withdraw consent or request data deletion, use Data Reset &amp; Deletion.</string>
 </resources>

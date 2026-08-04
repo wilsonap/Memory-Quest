@@ -1,5 +1,6 @@
 package com.example.ui.screens.profile
 
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -22,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.material3.Scaffold
 import com.example.R
 import com.example.avatar.model.AvatarType
 import com.example.data.local.entity.AchievementEntity
@@ -30,6 +32,7 @@ import com.example.data.local.entity.StatisticsEntity
 import com.example.data.local.entity.UnlockedThemeEntity
 import com.example.data.model.UsernameUiState
 import com.example.data.repository.UsernameReservationResult
+import com.example.ui.components.BannerAdContainer
 import com.example.ui.components.NameEntryDialog
 import com.example.ui.components.TopGameBar
 import com.example.ui.screens.profile.components.ActionButtons
@@ -43,6 +46,9 @@ import com.example.ui.screens.profile.util.XPCalculator
 import com.example.ui.screens.profile.viewmodel.ProfileViewModel
 import com.example.ui.theme.ImmersiveBg
 
+import androidx.compose.runtime.LaunchedEffect
+import com.example.data.repository.UsernameChangeEligibility
+
 @Composable
 fun ProfileScreen(
     player: PlayerEntity?,
@@ -51,6 +57,8 @@ fun ProfileScreen(
     unlockedThemes: List<UnlockedThemeEntity> = emptyList(),
     rankingDisplay: String = "Top 100",
     usernameUiState: UsernameUiState = UsernameUiState(),
+    usernameEligibility: UsernameChangeEligibility = UsernameChangeEligibility.Allowed,
+    onCheckEligibility: ((UsernameChangeEligibility) -> Unit) -> Unit = { callback -> callback(UsernameChangeEligibility.Allowed) },
     onNameInputChange: (String, Boolean) -> Unit = { _, _ -> },
     onReserveUsername: (String, (UsernameReservationResult) -> Unit) -> Unit = { _, _ -> },
     onEditAvatarClick: () -> Unit = {},
@@ -59,6 +67,7 @@ fun ProfileScreen(
     onNavigateToAchievements: () -> Unit = {},
     onNavigateToRanking: () -> Unit = {},
     onBackClick: () -> Unit = {},
+    isAdsRemoved: Boolean = false,
     profileViewModel: ProfileViewModel = viewModel(),
     modifier: Modifier = Modifier
 ) {
@@ -66,6 +75,66 @@ fun ProfileScreen(
     val uiState by profileViewModel.uiState.collectAsState()
 
     var showEditNameModal by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        onCheckEligibility { }
+    }
+
+    val handleEditNameClick = {
+        onCheckEligibility { eligibility ->
+            when (eligibility) {
+                is UsernameChangeEligibility.Allowed -> {
+                    showEditNameModal = true
+                }
+                is UsernameChangeEligibility.Offline -> {
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.username_change_offline_error),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+                is UsernameChangeEligibility.Unauthenticated -> {
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.username_change_unauthenticated_error),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+                is UsernameChangeEligibility.FirestoreUnavailable -> {
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.username_change_firestore_unavailable_error),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+                is UsernameChangeEligibility.PermissionDenied -> {
+                    Log.e("ProfileScreen", "[VALIDATION] PERMISSION_DENIED no caminho: ${eligibility.docPath}")
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.username_change_permission_denied_error, eligibility.docPath),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+                is UsernameChangeEligibility.Cooldown -> {
+                    val msg = when {
+                        eligibility.remainingDays > 0 -> context.getString(
+                            R.string.username_change_cooldown_days_msg,
+                            eligibility.remainingDays
+                        )
+                        eligibility.remainingHours > 0 -> context.getString(
+                            R.string.username_change_cooldown_hours_msg,
+                            eligibility.remainingHours
+                        )
+                        else -> context.getString(
+                            R.string.username_change_cooldown_minutes_msg,
+                            eligibility.remainingMinutes.coerceAtLeast(1)
+                        )
+                    }
+                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
 
     val xpInfo = remember(player, stats) {
         XPCalculator.calculateXp(player, stats)
@@ -78,12 +147,19 @@ fun ProfileScreen(
     val playerName = player?.name?.ifEmpty { "Explorador" } ?: "Explorador"
     val unlockedAchievementsCount = achievements.count { it.isUnlocked }
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(ImmersiveBg)
-    ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+    Scaffold(
+        containerColor = ImmersiveBg,
+        bottomBar = {
+            BannerAdContainer(isAdsRemoved = isAdsRemoved)
+        },
+        modifier = modifier.fillMaxSize()
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
             // Header Top Bar
             TopGameBar(
                 coins = player?.coins ?: 0,
@@ -107,7 +183,7 @@ fun ProfileScreen(
                     avatarLocalPath = player?.avatarLocalPath ?: "",
                     xpInfo = xpInfo,
                     onEditAvatarClick = onEditAvatarClick,
-                    onEditNameClick = { showEditNameModal = true },
+                    onEditNameClick = handleEditNameClick,
                     onShareClick = { profileViewModel.setShareDialogOpen(true) }
                 )
 
@@ -115,7 +191,7 @@ fun ProfileScreen(
                 SummaryCards(
                     rankingDisplay = rankingDisplay,
                     coins = player?.coins ?: 0,
-                    lives = 3,
+                    lives = player?.totalLives ?: 3,
                     unlockedAchievementsCount = unlockedAchievementsCount,
                     totalAchievementsCount = if (achievements.isNotEmpty()) achievements.size else 60,
                     onRankingClick = onNavigateToRanking,
@@ -139,10 +215,11 @@ fun ProfileScreen(
 
                 // 6. AÇÕES DO PERFIL (Editar Nome, Trocar Avatar, Compartilhar, Ver Stats)
                 ActionButtons(
-                    onEditNameClick = { showEditNameModal = true },
+                    onEditNameClick = handleEditNameClick,
                     onEditAvatarClick = onEditAvatarClick,
                     onShareClick = { profileViewModel.setShareDialogOpen(true) },
-                    onViewStatsClick = onNavigateToStats
+                    onViewStatsClick = onNavigateToStats,
+                    usernameEligibility = usernameEligibility
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
@@ -176,6 +253,23 @@ fun ProfileScreen(
                         if (result is UsernameReservationResult.Success || result is UsernameReservationResult.PendingOffline) {
                             showEditNameModal = false
                             Toast.makeText(context, "Nome atualizado com sucesso!", Toast.LENGTH_SHORT).show()
+                        } else if (result is UsernameReservationResult.Cooldown) {
+                            showEditNameModal = false
+                            val msg = when {
+                                result.remainingDays > 0 -> context.getString(
+                                    R.string.username_change_cooldown_days_msg,
+                                    result.remainingDays
+                                )
+                                result.remainingHours > 0 -> context.getString(
+                                    R.string.username_change_cooldown_hours_msg,
+                                    result.remainingHours
+                                )
+                                else -> context.getString(
+                                    R.string.username_change_cooldown_minutes_msg,
+                                    result.remainingMinutes.coerceAtLeast(1)
+                                )
+                            }
+                            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                         } else if (result is UsernameReservationResult.Error) {
                             Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
                         } else if (result is UsernameReservationResult.Taken) {
@@ -187,4 +281,5 @@ fun ProfileScreen(
             )
         }
     }
+}
 }

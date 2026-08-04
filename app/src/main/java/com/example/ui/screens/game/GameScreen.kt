@@ -37,6 +37,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -65,6 +66,7 @@ import com.example.avatar.model.AvatarType
 import com.example.avatar.ui.AvatarImage
 import com.example.data.local.entity.PlayerEntity
 import com.example.data.model.LevelConfig
+import com.example.ui.components.BannerAdContainer
 import com.example.ui.components.BannerAdView
 import com.example.ui.components.Card3D
 import com.example.ui.components.SparkleParticleOverlay
@@ -130,150 +132,205 @@ fun GameScreen(
 
     val levelConfig = LevelConfig.getConfigForLevel(state.levelNumber)
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(ImmersiveBg)
-    ) {
-        if (state.status is GameUiStatus.LevelCompleted) {
-            SparkleParticleOverlay()
-        }
-
-        Column(modifier = Modifier.fillMaxSize()) {
-            // Header Bar
-            TopGameBar(
-                coins = coins,
-                lives = state.lives,
-                level = state.levelNumber,
-                onBackClick = onBackToHome
-            )
-
-            // Dynamic Banner Bar
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        when (state.status) {
-                            is GameUiStatus.Previewing -> ImmersivePrimaryContainer
-                            is GameUiStatus.Playing -> ImmersiveSurface
-                            else -> ImmersiveSurface
-                        }
-                    )
-                    .padding(vertical = 8.dp, horizontal = 16.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
+    Scaffold(
+        containerColor = ImmersiveBg,
+        bottomBar = {
+            Column {
+                // In-game Boosters Toolbar
+                Surface(
+                    color = Color(0xFF160D2E),
+                    tonalElevation = 8.dp,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    when (val status = state.status) {
-                        is GameUiStatus.Previewing -> {
-                            Text(
-                                text = stringResource(R.string.game_preview_text, status.remainingSeconds),
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                            )
-                        }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceAround,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Hint Booster
+                        BoosterActionButton(
+                            title = stringResource(R.string.game_hint_button, state.remainingHints),
+                            icon = Icons.Default.Lightbulb,
+                            tint = Color(0xFFFFB703),
+                            onClick = onUseHint,
+                            enabled = state.status is GameUiStatus.Playing && state.remainingHints > 0,
+                            testTag = "booster_hint_button"
+                        )
 
-                        is GameUiStatus.Playing -> {
-                            Icon(
-                                imageVector = Icons.Default.Timer,
-                                contentDescription = null,
-                                tint = if (state.isTimerFrozen) Color(0xFF4CC9F0) else Color.White,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = stringResource(R.string.game_time, formatTime(state.elapsedTimeSeconds)),
-                                style = MaterialTheme.typography.titleSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                            )
+                        // Reveal Pair
+                        BoosterActionButton(
+                            title = "${stringResource(R.string.game_reveal_button)} (150💰)",
+                            icon = Icons.Default.Visibility,
+                            tint = Color(0xFF4CC9F0),
+                            onClick = onRevealPair,
+                            enabled = state.status is GameUiStatus.Playing && coins >= 150,
+                            testTag = "booster_reveal_button"
+                        )
 
-                            Spacer(modifier = Modifier.width(16.dp))
+                        // Freeze Timer
+                        BoosterActionButton(
+                            title = "${stringResource(R.string.game_freeze_button)} (110💰)",
+                            icon = Icons.Default.AcUnit,
+                            tint = Color(0xFFE0AAFF),
+                            onClick = onFreezeTimer,
+                            enabled = state.status is GameUiStatus.Playing && coins >= 110 && !state.isTimerFrozen,
+                            testTag = "booster_freeze_button"
+                        )
+                    }
+                }
 
-                            Text(
-                                text = stringResource(R.string.game_pairs, state.pairsFound, state.totalPairs),
-                                style = MaterialTheme.typography.titleSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF06D6A0)
-                                )
-                            )
+                BannerAdContainer(isAdsRemoved = isAdsRemoved)
+            }
+        },
+        modifier = modifier.fillMaxSize()
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
+            if (state.status is GameUiStatus.LevelCompleted) {
+                SparkleParticleOverlay()
+            }
 
-                            if (state.currentCombo > 1) {
-                                Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Header Bar
+                TopGameBar(
+                    coins = coins,
+                    lives = state.lives,
+                    level = state.levelNumber,
+                    onBackClick = onBackToHome
+                )
+
+                // Dynamic Banner Bar
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            when (state.status) {
+                                is GameUiStatus.Previewing -> ImmersivePrimaryContainer
+                                is GameUiStatus.Playing -> ImmersiveSurface
+                                else -> ImmersiveSurface
+                            }
+                        )
+                        .padding(vertical = 8.dp, horizontal = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        when (val status = state.status) {
+                            is GameUiStatus.Previewing -> {
                                 Text(
-                                    text = stringResource(R.string.game_combo, state.currentCombo),
-                                    style = MaterialTheme.typography.titleSmall.copy(
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = Color(0xFFFFB703)
+                                    text = stringResource(R.string.game_preview_text, status.remainingSeconds),
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
                                     )
                                 )
                             }
-                        }
 
-                        else -> {
-                            Text(
-                                text = "${stringResource(R.string.settings_theme)}: ${stringResource(state.theme.nameRes)}",
-                                style = MaterialTheme.typography.titleSmall.copy(color = Color.White)
-                            )
+                            is GameUiStatus.Playing -> {
+                                Icon(
+                                    imageVector = Icons.Default.Timer,
+                                    contentDescription = null,
+                                    tint = if (state.isTimerFrozen) Color(0xFF4CC9F0) else Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = stringResource(R.string.game_time, formatTime(state.elapsedTimeSeconds)),
+                                    style = MaterialTheme.typography.titleSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                )
+
+                                Spacer(modifier = Modifier.width(16.dp))
+
+                                Text(
+                                    text = stringResource(R.string.game_pairs, state.pairsFound, state.totalPairs),
+                                    style = MaterialTheme.typography.titleSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF06D6A0)
+                                    )
+                                )
+
+                                if (state.currentCombo > 1) {
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Text(
+                                        text = stringResource(R.string.game_combo, state.currentCombo),
+                                        style = MaterialTheme.typography.titleSmall.copy(
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = Color(0xFFFFB703)
+                                        )
+                                    )
+                                }
+                            }
+
+                            else -> {
+                                Text(
+                                    text = "${stringResource(R.string.settings_theme)}: ${stringResource(state.theme.nameRes)}",
+                                    style = MaterialTheme.typography.titleSmall.copy(color = Color.White)
+                                )
+                            }
                         }
                     }
                 }
-            }
 
-            // Cards Grid Layout
-            BoxWithConstraints(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                val availW = maxWidth
-                val availH = maxHeight
-
-                val gridLayout = remember(state.cards.size, availW, availH) {
-                    calculateOptimalGrid(
-                        cardCount = state.cards.size,
-                        availableWidth = availW,
-                        availableHeight = availH
-                    )
-                }
-
-                Column(
+                // Cards Grid Layout
+                BoxWithConstraints(
                     modifier = Modifier
-                        .width(gridLayout.totalGridWidth)
-                        .height(gridLayout.totalGridHeight),
-                    verticalArrangement = Arrangement.spacedBy(gridLayout.spacing),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    for (r in 0 until gridLayout.rows) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(gridLayout.cardHeight),
-                            horizontalArrangement = Arrangement.spacedBy(gridLayout.spacing),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            for (c in 0 until gridLayout.cols) {
-                                val index = r * gridLayout.cols + c
-                                if (index < state.cards.size) {
-                                    val card = state.cards[index]
-                                    Card3D(
-                                        card = card,
-                                        onClick = { onCardClick(index) },
-                                        cardFrameId = state.frameId,
-                                        cardBgColorHex = state.theme.cardBgColorHex,
-                                        modifier = Modifier
-                                            .width(gridLayout.cardWidth)
-                                            .height(gridLayout.cardHeight)
-                                    )
-                                } else {
-                                    Spacer(modifier = Modifier.width(gridLayout.cardWidth))
+                    val availW = maxWidth
+                    val availH = maxHeight
+
+                    val gridLayout = remember(state.cards.size, availW, availH) {
+                        calculateOptimalGrid(
+                            cardCount = state.cards.size,
+                            availableWidth = availW,
+                            availableHeight = availH
+                        )
+                    }
+
+                    Column(
+                        modifier = Modifier
+                            .width(gridLayout.totalGridWidth)
+                            .height(gridLayout.totalGridHeight),
+                        verticalArrangement = Arrangement.spacedBy(gridLayout.spacing),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        for (r in 0 until gridLayout.rows) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(gridLayout.cardHeight),
+                                horizontalArrangement = Arrangement.spacedBy(gridLayout.spacing),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                for (c in 0 until gridLayout.cols) {
+                                    val index = r * gridLayout.cols + c
+                                    if (index < state.cards.size) {
+                                        val card = state.cards[index]
+                                        Card3D(
+                                            card = card,
+                                            onClick = { onCardClick(index) },
+                                            cardFrameId = state.frameId,
+                                            cardBgColorHex = state.theme.cardBgColorHex,
+                                            modifier = Modifier
+                                                .width(gridLayout.cardWidth)
+                                                .height(gridLayout.cardHeight)
+                                        )
+                                    } else {
+                                        Spacer(modifier = Modifier.width(gridLayout.cardWidth))
+                                    }
                                 }
                             }
                         }
@@ -281,155 +338,109 @@ fun GameScreen(
                 }
             }
 
-            // In-game Boosters Toolbar
-            Surface(
-                color = Color(0xFF160D2E),
-                tonalElevation = 8.dp,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceAround,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Hint Booster
-                    BoosterActionButton(
-                        title = stringResource(R.string.game_hint_button, state.remainingHints),
-                        icon = Icons.Default.Lightbulb,
-                        tint = Color(0xFFFFB703),
-                        onClick = onUseHint,
-                        enabled = state.status is GameUiStatus.Playing && state.remainingHints > 0,
-                        testTag = "booster_hint_button"
-                    )
-
-                    // Reveal Pair
-                    BoosterActionButton(
-                        title = "${stringResource(R.string.game_reveal_button)} (150💰)",
-                        icon = Icons.Default.Visibility,
-                        tint = Color(0xFF4CC9F0),
-                        onClick = onRevealPair,
-                        enabled = state.status is GameUiStatus.Playing && coins >= 150,
-                        testTag = "booster_reveal_button"
-                    )
-
-                    // Freeze Timer
-                    BoosterActionButton(
-                        title = "${stringResource(R.string.game_freeze_button)} (110💰)",
-                        icon = Icons.Default.AcUnit,
-                        tint = Color(0xFFE0AAFF),
-                        onClick = onFreezeTimer,
-                        enabled = state.status is GameUiStatus.Playing && coins >= 110 && !state.isTimerFrozen,
-                        testTag = "booster_freeze_button"
-                    )
-                }
+            // Victory Screen Overlay
+            if (state.status is GameUiStatus.LevelCompleted) {
+                val completed = state.status as GameUiStatus.LevelCompleted
+                VictoryScreen(
+                    completed = completed,
+                    player = player,
+                    onNextLevel = onNextLevel,
+                    onRestartLevel = onRestartLevel,
+                    onBackToHome = onBackToHome,
+                    isAdsRemoved = isAdsRemoved
+                )
             }
-        }
 
-        // Victory Screen Overlay
-        if (state.status is GameUiStatus.LevelCompleted) {
-            val completed = state.status as GameUiStatus.LevelCompleted
-            VictoryScreen(
-                completed = completed,
-                player = player,
-                onNextLevel = onNextLevel,
-                onRestartLevel = onRestartLevel,
-                onBackToHome = onBackToHome,
-                isAdsRemoved = isAdsRemoved
-            )
-        }
-
-        // Defeat Dialog
-        if (state.status is GameUiStatus.Defeat) {
-            val defeat = state.status as GameUiStatus.Defeat
-            Dialog(
-                onDismissRequest = {},
-                properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(24.dp),
-                    color = Color(0xFF28111D),
-                    tonalElevation = 12.dp,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                        .border(2.dp, Color(0xFFE63946), RoundedCornerShape(24.dp))
+            // Defeat Dialog
+            if (state.status is GameUiStatus.Defeat) {
+                val defeat = state.status as GameUiStatus.Defeat
+                Dialog(
+                    onDismissRequest = {},
+                    properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
                 ) {
-                    Column(
+                    Surface(
+                        shape = RoundedCornerShape(24.dp),
+                        color = Color(0xFF28111D),
+                        tonalElevation = 12.dp,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                            .padding(16.dp)
+                            .border(2.dp, Color(0xFFE63946), RoundedCornerShape(24.dp))
                     ) {
-                        Text(text = "💔", fontSize = 56.sp)
-
-                        Text(
-                            text = stringResource(R.string.game_defeat_title),
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFFE63946)
-                            ),
-                            textAlign = TextAlign.Center
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Text(
-                            text = "Você encontrou ${defeat.pairsFoundCount} de ${state.totalPairs} pares nesta fase.",
-                            style = MaterialTheme.typography.bodyMedium.copy(color = Color.White.copy(alpha = 0.8f)),
-                            textAlign = TextAlign.Center
-                        )
-
-                        Spacer(modifier = Modifier.height(20.dp))
-
-                        Button(
-                            onClick = onRestartLevel,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE63946)),
-                            shape = RoundedCornerShape(16.dp),
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(50.dp)
-                                .testTag("try_again_button")
+                                .padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Icon(imageVector = Icons.Default.Refresh, contentDescription = null)
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(text = "💔", fontSize = 56.sp)
+
                             Text(
-                                text = "TENTAR NOVAMENTE 🔄",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                text = stringResource(R.string.game_defeat_title),
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color(0xFFE63946)
+                                ),
+                                textAlign = TextAlign.Center
                             )
-                        }
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OutlinedButton(
-                                onClick = onGoToShop,
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier.weight(1f)
+                            Text(
+                                text = "Você encontrou ${defeat.pairsFoundCount} de ${state.totalPairs} pares nesta fase.",
+                                style = MaterialTheme.typography.bodyMedium.copy(color = Color.White.copy(alpha = 0.8f)),
+                                textAlign = TextAlign.Center
+                            )
+
+                            Spacer(modifier = Modifier.height(20.dp))
+
+                            Button(
+                                onClick = onRestartLevel,
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE63946)),
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(50.dp)
+                                    .testTag("try_again_button")
                             ) {
-                                Icon(imageVector = Icons.Default.ShoppingBag, contentDescription = null, tint = Color(0xFFFFB703))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Loja", color = Color(0xFFFFB703))
+                                Icon(imageVector = Icons.Default.Refresh, contentDescription = null)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "TENTAR NOVAMENTE 🔄",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                )
                             }
 
-                            OutlinedButton(
-                                onClick = onBackToHome,
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(imageVector = Icons.Default.Home, contentDescription = null, tint = Color.White)
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Menu", color = Color.White)
-                            }
-                        }
+                            Spacer(modifier = Modifier.height(8.dp))
 
-                        Spacer(modifier = Modifier.height(8.dp))
-                        BannerAdView(isAdsRemoved = isAdsRemoved)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = onGoToShop,
+                                    shape = RoundedCornerShape(14.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(imageVector = Icons.Default.ShoppingBag, contentDescription = null, tint = Color(0xFFFFB703))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Loja", color = Color(0xFFFFB703))
+                                }
+
+                                OutlinedButton(
+                                    onClick = onBackToHome,
+                                    shape = RoundedCornerShape(14.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(imageVector = Icons.Default.Home, contentDescription = null, tint = Color.White)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Menu", color = Color.White)
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+                            BannerAdContainer(isAdsRemoved = isAdsRemoved)
+                        }
                     }
                 }
             }

@@ -1,0 +1,80 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    match /usernames/{username} {
+      allow read: if true;
+      allow create: if isSignedIn()
+        && request.resource.data.uid == request.auth.uid;
+      allow update: if isSignedIn()
+        && resource.data.uid == request.auth.uid;
+      allow delete: if isSignedIn()
+        && resource.data.uid == request.auth.uid;
+    }
+
+    match /leaderboard/{userId} {
+      allow read: if true;
+      allow create, update: if isSignedIn()
+        && request.auth.uid == userId;
+      allow delete: if isSignedIn()
+        && request.auth.uid == userId;
+    }
+
+    match /user_consents/{userId} {
+      allow read, write: if isSignedIn()
+        && request.auth.uid == userId;
+    }
+
+    match /username_settings/{userId} {
+
+      allow read: if isSignedIn()
+        && request.auth.uid == userId;
+
+      allow create: if isSignedIn()
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly([
+          'uid',
+          'lastUsernameChangeAt',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'uid',
+          'lastUsernameChangeAt',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.lastUsernameChangeAt == null
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if isSignedIn()
+        && request.auth.uid == userId
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.lastUsernameChangeAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && (
+          resource.data.lastUsernameChangeAt == null
+          || request.time >= resource.data.lastUsernameChangeAt
+              + duration.value(7, 'd')
+        )
+        && request.resource.data.diff(resource.data)
+            .affectedKeys()
+            .hasOnly([
+              'lastUsernameChangeAt',
+              'updatedAt'
+            ]);
+
+      allow delete: if isSignedIn()
+        && request.auth.uid == userId
+        && resource.data.uid == request.auth.uid;
+    }
+  }
+}

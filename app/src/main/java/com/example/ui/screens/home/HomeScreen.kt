@@ -32,6 +32,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -55,6 +56,7 @@ import com.example.R
 import com.example.avatar.model.AvatarType
 import com.example.avatar.ui.AvatarImage
 import com.example.data.local.entity.PlayerEntity
+import com.example.ui.components.BannerAdContainer
 import com.example.ui.components.BannerAdView
 import com.example.ui.components.SparkleParticleOverlay
 import com.example.ui.screens.profile.model.PlayerTitle
@@ -96,21 +98,28 @@ fun HomeScreen(
         label = "home_xp_anim"
     )
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(ImmersiveBg)
-    ) {
-        SparkleParticleOverlay()
-
-        Column(
+    Scaffold(
+        containerColor = ImmersiveBg,
+        bottomBar = {
+            BannerAdContainer(isAdsRemoved = isAdsRemoved)
+        },
+        modifier = modifier.fillMaxSize()
+    ) { innerPadding ->
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(20.dp)
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
+                .padding(innerPadding)
         ) {
+            SparkleParticleOverlay()
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
             // Header Player Profile Card (Tapping anywhere opens PROFILE)
             Surface(
                 color = ImmersiveSurface,
@@ -419,14 +428,13 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            BannerAdView(isAdsRemoved = isAdsRemoved)
-
             Text(
                 text = stringResource(R.string.home_footer_text),
                 style = MaterialTheme.typography.labelSmall.copy(color = ImmersiveTextSecondary.copy(alpha = 0.5f))
             )
         }
     }
+}
 }
 
 @Composable

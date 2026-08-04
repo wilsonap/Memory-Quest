@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
+import com.example.data.model.UserConsentState
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
@@ -25,6 +27,39 @@ class DataStoreManager(private val context: Context) {
         val KEY_ADS_REMOVED = booleanPreferencesKey("ads_removed")
         val KEY_LANGUAGE = stringPreferencesKey("language")
         val KEY_DARK_MODE = stringPreferencesKey("dark_mode") // "AUTO", "DARK", "LIGHT"
+
+        val KEY_TERMS_ACCEPTED = booleanPreferencesKey("terms_accepted")
+        val KEY_PRIVACY_ACCEPTED = booleanPreferencesKey("privacy_accepted")
+        val KEY_TERMS_VERSION_ACCEPTED = stringPreferencesKey("terms_version_accepted")
+        val KEY_PRIVACY_VERSION_ACCEPTED = stringPreferencesKey("privacy_version_accepted")
+        val KEY_ACCEPTED_AT_LOCAL = longPreferencesKey("accepted_at_local")
+        val KEY_CONSENT_SYNC_PENDING = booleanPreferencesKey("consent_sync_pending")
+
+        val KEY_CACHED_LAST_USERNAME_CHANGE_AT = longPreferencesKey("cached_last_username_change_at")
+        val KEY_CACHED_NEXT_USERNAME_CHANGE_AT = longPreferencesKey("cached_next_username_change_at")
+    }
+
+    val cachedLastUsernameChangeAt: Flow<Long?> = context.dataStore.data.map { prefs ->
+        prefs[KEY_CACHED_LAST_USERNAME_CHANGE_AT]
+    }
+
+    val cachedNextUsernameChangeAt: Flow<Long?> = context.dataStore.data.map { prefs ->
+        prefs[KEY_CACHED_NEXT_USERNAME_CHANGE_AT]
+    }
+
+    suspend fun updateUsernameChangeCache(lastChangeAt: Long?, nextChangeAt: Long?) {
+        context.dataStore.edit { prefs ->
+            if (lastChangeAt != null) {
+                prefs[KEY_CACHED_LAST_USERNAME_CHANGE_AT] = lastChangeAt
+            } else {
+                prefs.remove(KEY_CACHED_LAST_USERNAME_CHANGE_AT)
+            }
+            if (nextChangeAt != null) {
+                prefs[KEY_CACHED_NEXT_USERNAME_CHANGE_AT] = nextChangeAt
+            } else {
+                prefs.remove(KEY_CACHED_NEXT_USERNAME_CHANGE_AT)
+            }
+        }
     }
 
     val soundEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
@@ -57,6 +92,39 @@ class DataStoreManager(private val context: Context) {
 
     val darkMode: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[KEY_DARK_MODE] ?: "AUTO"
+    }
+
+    val userConsentState: Flow<UserConsentState> = context.dataStore.data.map { prefs ->
+        UserConsentState(
+            termsAccepted = prefs[KEY_TERMS_ACCEPTED] ?: false,
+            privacyAccepted = prefs[KEY_PRIVACY_ACCEPTED] ?: false,
+            termsVersionAccepted = prefs[KEY_TERMS_VERSION_ACCEPTED] ?: "",
+            privacyVersionAccepted = prefs[KEY_PRIVACY_VERSION_ACCEPTED] ?: "",
+            acceptedAtLocal = prefs[KEY_ACCEPTED_AT_LOCAL] ?: 0L,
+            consentSyncPending = prefs[KEY_CONSENT_SYNC_PENDING] ?: false
+        )
+    }
+
+    suspend fun saveConsentLocally(
+        termsVersion: String,
+        privacyVersion: String,
+        acceptedAt: Long,
+        syncPending: Boolean
+    ) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_TERMS_ACCEPTED] = true
+            prefs[KEY_PRIVACY_ACCEPTED] = true
+            prefs[KEY_TERMS_VERSION_ACCEPTED] = termsVersion
+            prefs[KEY_PRIVACY_VERSION_ACCEPTED] = privacyVersion
+            prefs[KEY_ACCEPTED_AT_LOCAL] = acceptedAt
+            prefs[KEY_CONSENT_SYNC_PENDING] = syncPending
+        }
+    }
+
+    suspend fun setConsentSyncPending(pending: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_CONSENT_SYNC_PENDING] = pending
+        }
     }
 
     suspend fun setSoundEnabled(enabled: Boolean) {

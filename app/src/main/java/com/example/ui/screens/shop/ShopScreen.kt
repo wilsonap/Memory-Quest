@@ -39,17 +39,23 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -63,6 +69,7 @@ import com.example.data.local.entity.PlayerEntity
 import com.example.data.local.entity.UnlockedThemeEntity
 import com.example.data.model.GameTheme
 import com.example.data.model.ShopItem
+import com.example.ui.components.BannerAdContainer
 import com.example.ui.components.BannerAdView
 import com.example.ui.components.TopGameBar
 
@@ -83,7 +90,11 @@ fun ShopScreen(
     val coins = player?.coins ?: 0
     val unlockedThemeIds = unlockedThemes.map { it.themeId }.toSet()
 
-    Box(
+    Scaffold(
+        containerColor = Color.Transparent,
+        bottomBar = {
+            BannerAdContainer(isAdsRemoved = isAdsRemoved)
+        },
         modifier = modifier
             .fillMaxSize()
             .background(
@@ -94,8 +105,12 @@ fun ShopScreen(
                     )
                 )
             )
-    ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
             TopGameBar(
                 coins = coins,
                 title = stringResource(R.string.shop_title),
@@ -182,8 +197,6 @@ fun ShopScreen(
                     }
                 }
             }
-
-            BannerAdView(isAdsRemoved = isAdsRemoved)
         }
     }
 }
@@ -253,9 +266,21 @@ private fun BoosterShopCard(
 
             Spacer(modifier = Modifier.width(8.dp))
 
+            var isPurchasing by remember { mutableStateOf(false) }
+            val scale by animateFloatAsState(
+                targetValue = if (isPurchasing) 1.2f else 1.0f,
+                animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                finishedListener = { isPurchasing = false },
+                label = "booster_buy_scale"
+            )
+
             Button(
-                onClick = onBuy,
+                onClick = {
+                    isPurchasing = true
+                    onBuy()
+                },
                 enabled = canAfford,
+                modifier = Modifier.scale(scale),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFFFFB703),
                     disabledContainerColor = Color(0xFF383120)

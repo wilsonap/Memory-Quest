@@ -24,7 +24,7 @@ import com.example.data.local.entity.UnlockedThemeEntity
         AchievementEntity::class,
         PendingSyncEntity::class
     ],
-    version = 4,
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -76,6 +76,45 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Previne perdas na transição 4 -> 5
+            }
+        }
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Previne perdas na transição 5 -> 6
+            }
+        }
+
+        val MIGRATION_4_6 = object : Migration(4, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Previne perdas na transição 4 -> 6
+            }
+        }
+
+        val MIGRATION_3_6 = object : Migration(3, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                MIGRATION_3_4.migrate(db)
+            }
+        }
+
+        val MIGRATION_2_6 = object : Migration(2, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                MIGRATION_2_3.migrate(db)
+                MIGRATION_3_4.migrate(db)
+            }
+        }
+
+        val MIGRATION_1_6 = object : Migration(1, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                MIGRATION_1_2.migrate(db)
+                MIGRATION_2_3.migrate(db)
+                MIGRATION_3_4.migrate(db)
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -83,7 +122,17 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "memory_quest_db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(
+                        MIGRATION_1_2,
+                        MIGRATION_2_3,
+                        MIGRATION_3_4,
+                        MIGRATION_4_5,
+                        MIGRATION_5_6,
+                        MIGRATION_4_6,
+                        MIGRATION_3_6,
+                        MIGRATION_2_6,
+                        MIGRATION_1_6
+                    )
                     .build()
                 INSTANCE = instance
                 instance

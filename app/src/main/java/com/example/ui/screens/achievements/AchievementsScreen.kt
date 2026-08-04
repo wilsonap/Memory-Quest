@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.MonetizationOn
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -46,6 +47,7 @@ import androidx.compose.ui.res.stringResource
 import com.example.R
 import com.example.data.local.entity.AchievementEntity
 import com.example.data.local.entity.PlayerEntity
+import com.example.ui.components.BannerAdContainer
 import com.example.ui.components.TopGameBar
 
 @Composable
@@ -53,9 +55,14 @@ fun AchievementsScreen(
     player: PlayerEntity?,
     achievements: List<AchievementEntity>,
     onBackClick: () -> Unit,
+    isAdsRemoved: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    Box(
+    Scaffold(
+        containerColor = Color.Transparent,
+        bottomBar = {
+            BannerAdContainer(isAdsRemoved = isAdsRemoved)
+        },
         modifier = modifier
             .fillMaxSize()
             .background(
@@ -66,8 +73,12 @@ fun AchievementsScreen(
                     )
                 )
             )
-    ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
             TopGameBar(
                 coins = player?.coins ?: 0,
                 title = stringResource(R.string.achievements_title),
