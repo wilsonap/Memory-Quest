@@ -30,7 +30,12 @@ class MusicManager private constructor(private val context: Context) : DefaultLi
 
         fun getInstance(context: Context): MusicManager {
             return INSTANCE ?: synchronized(this) {
-                INSTANCE ?: MusicManager(context.applicationContext).also {
+                val appContext = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    context.applicationContext.createAttributionContext("default")
+                } else {
+                    context.applicationContext
+                }
+                INSTANCE ?: MusicManager(appContext).also {
                     INSTANCE = it
                     it.initLifecycleObserver()
                 }

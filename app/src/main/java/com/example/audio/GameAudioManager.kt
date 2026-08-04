@@ -53,7 +53,12 @@ class GameAudioManager private constructor(private val context: Context) {
 
         fun getInstance(context: Context): GameAudioManager {
             return INSTANCE ?: synchronized(this) {
-                INSTANCE ?: GameAudioManager(context.applicationContext).also { INSTANCE = it }
+                val appContext = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    context.applicationContext.createAttributionContext("default")
+                } else {
+                    context.applicationContext
+                }
+                INSTANCE ?: GameAudioManager(appContext).also { INSTANCE = it }
             }
         }
     }
