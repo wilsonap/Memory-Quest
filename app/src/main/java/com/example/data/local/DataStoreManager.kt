@@ -26,7 +26,6 @@ class DataStoreManager(private val context: Context) {
         val KEY_SFX_VOLUME = floatPreferencesKey("sfx_volume")
         val KEY_ADS_REMOVED = booleanPreferencesKey("ads_removed")
         val KEY_LANGUAGE = stringPreferencesKey("language")
-        val KEY_DARK_MODE = stringPreferencesKey("dark_mode") // "AUTO", "DARK", "LIGHT"
 
         val KEY_TERMS_ACCEPTED = booleanPreferencesKey("terms_accepted")
         val KEY_PRIVACY_ACCEPTED = booleanPreferencesKey("privacy_accepted")
@@ -90,10 +89,6 @@ class DataStoreManager(private val context: Context) {
         prefs[KEY_LANGUAGE] ?: "PT"
     }
 
-    val darkMode: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[KEY_DARK_MODE] ?: "AUTO"
-    }
-
     val userConsentState: Flow<UserConsentState> = context.dataStore.data.map { prefs ->
         UserConsentState(
             termsAccepted = prefs[KEY_TERMS_ACCEPTED] ?: false,
@@ -151,10 +146,6 @@ class DataStoreManager(private val context: Context) {
         context.dataStore.edit { prefs -> prefs[KEY_LANGUAGE] = language }
     }
 
-    suspend fun setDarkMode(mode: String) {
-        context.dataStore.edit { prefs -> prefs[KEY_DARK_MODE] = mode }
-    }
-
     suspend fun resetToDefaults() {
         context.dataStore.edit { prefs ->
             prefs[KEY_SOUND_ENABLED] = true
@@ -163,7 +154,6 @@ class DataStoreManager(private val context: Context) {
             prefs[KEY_MUSIC_VOLUME] = 0.5f
             prefs[KEY_SFX_VOLUME] = 0.8f
             prefs[KEY_LANGUAGE] = "PT"
-            prefs[KEY_DARK_MODE] = "AUTO"
         }
     }
 

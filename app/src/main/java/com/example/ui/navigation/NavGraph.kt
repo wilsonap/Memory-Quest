@@ -1,8 +1,6 @@
 package com.example.ui.navigation
 
-import android.app.Activity
 import android.content.Context
-import android.content.ContextWrapper
 import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -89,7 +87,6 @@ fun MemoryQuestNavGraph(
     val sfxVolume by mainViewModel.sfxVolume.collectAsStateWithLifecycle()
     val isAdsRemoved by mainViewModel.isAdsRemoved.collectAsStateWithLifecycle()
     val language by mainViewModel.language.collectAsStateWithLifecycle()
-    val darkMode by mainViewModel.darkMode.collectAsStateWithLifecycle()
 
     val gameState by gameViewModel.uiState.collectAsStateWithLifecycle()
     val userConsentState by mainViewModel.userConsentState.collectAsStateWithLifecycle()
@@ -277,19 +274,13 @@ fun MemoryQuestNavGraph(
                 onUseHint = { gameViewModel.useHint() },
                 onRevealPair = { gameViewModel.useRevealPair() },
                 onFreezeTimer = { gameViewModel.freezeTimer() },
-                onNextLevel = {
-                    mainViewModel.showNextLevelInterstitial(context.findActivity()) {
-                        gameViewModel.nextLevel()
-                    }
-                },
+                onNextLevel = { gameViewModel.nextLevel() },
                 onRestartLevel = {
                     gameViewModel.restartLevel()
                 },
                 onGoToShop = { navController.navigate(Screen.Shop.route) },
                 onBackToHome = {
-                    mainViewModel.showBackToHomeInterstitial(context.findActivity()) {
-                        navController.popBackStack(Screen.Home.route, false)
-                    }
+                    navController.popBackStack(Screen.Home.route, false)
                 },
                 onAppBackgrounded = { gameViewModel.onAppBackgrounded() },
                 isAdsRemoved = isAdsRemoved
@@ -318,14 +309,12 @@ fun MemoryQuestNavGraph(
                 musicVolume = musicVolume,
                 sfxVolume = sfxVolume,
                 language = language,
-                darkMode = darkMode,
                 onSetSound = { mainViewModel.setSoundEnabled(it) },
                 onSetMusic = { mainViewModel.setMusicEnabled(it) },
                 onSetVibration = { mainViewModel.setVibrationEnabled(it) },
                 onSetMusicVolume = { mainViewModel.setMusicVolume(it) },
                 onSetSfxVolume = { mainViewModel.setSfxVolume(it) },
                 onSetLanguage = { mainViewModel.setLanguage(it) },
-                onSetDarkMode = { mainViewModel.setDarkMode(it) },
                 onResetDefaults = { mainViewModel.resetSettings() },
                 onResetGameProgress = {
                     mainViewModel.audioManager.playButton()
@@ -425,13 +414,4 @@ fun MemoryQuestNavGraph(
             onCancel = { croppingUri = null }
         )
     }
-}
-
-private fun Context.findActivity(): Activity? {
-    var currentContext = this
-    while (currentContext is ContextWrapper) {
-        if (currentContext is Activity) return currentContext
-        currentContext = currentContext.baseContext
-    }
-    return null
 }

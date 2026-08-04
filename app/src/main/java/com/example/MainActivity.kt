@@ -61,14 +61,13 @@ class MainActivity : AppCompatActivity() {
         connectivityObserver.startListening()
 
         setContent {
-            val darkMode by mainViewModel.darkMode.collectAsStateWithLifecycle()
             val language by mainViewModel.language.collectAsStateWithLifecycle()
 
             LaunchedEffect(language) {
                 applyAppLanguage(language)
             }
 
-            MemoryQuestTheme(darkMode = darkMode) {
+            MemoryQuestTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     MemoryQuestNavGraph(
                         mainViewModel = mainViewModel,

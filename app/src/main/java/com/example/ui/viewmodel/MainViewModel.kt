@@ -1,10 +1,7 @@
 package com.example.ui.viewmodel
 
-import android.app.Activity
 import android.app.Application
 import android.util.Log
-import com.example.config.AdMobConfig
-import com.example.config.InterstitialManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.local.AppDatabase
@@ -66,7 +63,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val usernameSettingsRepository = UsernameSettingsRepository(dataStore)
     private val consentRepository by lazy { ConsentRepository(dataStore) }
     val audioManager = GameAudioManager.getInstance(application)
-    val interstitialManager = InterstitialManager(application)
 
     private val deleteAccountRepository by lazy {
         DeleteAccountRepository(
@@ -76,53 +72,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             avatarStorageManager = AvatarStorageManager(application),
             gameRepository = repository
         )
-    }
-
-    init {
-        interstitialManager.loadAd()
-    }
-
-    private var lastInterstitialTime: Long = 0
-    private var levelsCompletedCount: Int = 0
-    private val minInterstitialIntervalMs = 120_000L // 2 minutos de intervalo mínimo ao voltar ao menu
-
-    fun showInterstitialAd(activity: Activity?, onAdDismissed: () -> Unit) {
-        if (isAdsRemoved.value || !AdMobConfig.ADS_ENABLED) {
-            onAdDismissed()
-            return
-        }
-        if (activity != null) {
-            interstitialManager.show(activity) {
-                lastInterstitialTime = System.currentTimeMillis()
-                onAdDismissed()
-            }
-        } else {
-            onAdDismissed()
-        }
-    }
-
-    fun showNextLevelInterstitial(activity: Activity?, onAdDismissed: () -> Unit) {
-        levelsCompletedCount++
-        if (levelsCompletedCount >= 2 && (System.currentTimeMillis() - lastInterstitialTime >= 60_000L)) {
-            showInterstitialAd(activity) {
-                levelsCompletedCount = 0
-                onAdDismissed()
-            }
-        } else {
-            onAdDismissed()
-        }
-    }
-
-    fun showBackToHomeInterstitial(activity: Activity?, onAdDismissed: () -> Unit) {
-        val now = System.currentTimeMillis()
-        if (now - lastInterstitialTime >= minInterstitialIntervalMs) {
-            showInterstitialAd(activity) {
-                levelsCompletedCount = 0
-                onAdDismissed()
-            }
-        } else {
-            onAdDismissed()
-        }
     }
 
     private val _usernameEligibility = MutableStateFlow<UsernameChangeEligibility>(UsernameChangeEligibility.Allowed)
@@ -444,12 +393,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         initialValue = "PT"
     )
 
-    val darkMode: StateFlow<String> = repository.darkMode.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = "AUTO"
-    )
-
     fun onUsernameInputChanged(newInput: String, isOnline: Boolean) {
         usernameCheckJob?.cancel()
         val validation = UsernameValidator.validate(newInput)
@@ -609,10 +552,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { repository.setLanguage(lang) }
     }
 
-    fun setDarkMode(mode: String) {
-        viewModelScope.launch { repository.setDarkMode(mode) }
-    }
-
     fun resetSettings() {
         viewModelScope.launch { repository.resetDataStore() }
     }
@@ -650,8 +589,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _lastLeaderboardFetchTime.value = 0L
         _usernameUiState.value = UsernameUiState()
         _usernameEligibility.value = UsernameChangeEligibility.Allowed
-        levelsCompletedCount = 0
-        lastInterstitialTime = 0
     }
 
     override fun onCleared() {

@@ -23,7 +23,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Help
@@ -92,14 +91,12 @@ fun SettingsScreen(
     musicVolume: Float = 0.5f,
     sfxVolume: Float = 0.8f,
     language: String,
-    darkMode: String,
     onSetSound: (Boolean) -> Unit,
     onSetMusic: (Boolean) -> Unit,
     onSetVibration: (Boolean) -> Unit,
     onSetMusicVolume: (Float) -> Unit = {},
     onSetSfxVolume: (Float) -> Unit = {},
     onSetLanguage: (String) -> Unit,
-    onSetDarkMode: (String) -> Unit,
     onResetDefaults: () -> Unit,
     onResetGameProgress: () -> Unit = {},
     onDeleteAccount: (onResult: (DeleteAccountResult) -> Unit) -> Unit = {},
@@ -536,58 +533,6 @@ fun SettingsScreen(
                                         contentColor = if (isEnSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                                     )
                                 ) { Text("English") }
-                            }
-                        }
-
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
-
-                        // Tema Toggle (Claro / Escuro / Sistema)
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(imageVector = Icons.Default.DarkMode, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(stringResource(R.string.settings_theme), color = MaterialTheme.colorScheme.onSurface)
-                            }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                val isLight = darkMode.equals("LIGHT", ignoreCase = true)
-                                val isDark = darkMode.equals("DARK", ignoreCase = true)
-                                val isSystem = !isLight && !isDark
-
-                                OutlinedButton(
-                                    onClick = { onSetDarkMode("LIGHT") },
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.weight(1f),
-                                    colors = ButtonDefaults.outlinedButtonColors(
-                                        containerColor = if (isLight) MaterialTheme.colorScheme.primary else Color.Transparent,
-                                        contentColor = if (isLight) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                                    )
-                                ) { Text(stringResource(R.string.settings_theme_light), fontSize = 12.sp) }
-
-                                OutlinedButton(
-                                    onClick = { onSetDarkMode("DARK") },
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.weight(1f),
-                                    colors = ButtonDefaults.outlinedButtonColors(
-                                        containerColor = if (isDark) MaterialTheme.colorScheme.primary else Color.Transparent,
-                                        contentColor = if (isDark) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                                    )
-                                ) { Text(stringResource(R.string.settings_theme_dark), fontSize = 12.sp) }
-
-                                OutlinedButton(
-                                    onClick = { onSetDarkMode("AUTO") },
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.weight(1f),
-                                    colors = ButtonDefaults.outlinedButtonColors(
-                                        containerColor = if (isSystem) MaterialTheme.colorScheme.primary else Color.Transparent,
-                                        contentColor = if (isSystem) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                                    )
-                                ) { Text(stringResource(R.string.settings_theme_system), fontSize = 12.sp) }
                             }
                         }
                     }

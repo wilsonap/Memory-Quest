@@ -28,7 +28,6 @@ class GameRepository(
     val sfxVolume: Flow<Float> = dataStoreManager.sfxVolume
     val isAdsRemoved: Flow<Boolean> = dataStoreManager.isAdsRemoved
     val language: Flow<String> = dataStoreManager.language
-    val darkMode: Flow<String> = dataStoreManager.darkMode
 
     suspend fun ensureInitialized() {
         val player = dao.getPlayer()
@@ -218,7 +217,6 @@ class GameRepository(
     suspend fun setMusicVolume(vol: Float) = dataStoreManager.setMusicVolume(vol)
     suspend fun setSfxVolume(vol: Float) = dataStoreManager.setSfxVolume(vol)
     suspend fun setLanguage(lang: String) = dataStoreManager.setLanguage(lang)
-    suspend fun setDarkMode(mode: String) = dataStoreManager.setDarkMode(mode)
     suspend fun resetDataStore() = dataStoreManager.resetToDefaults()
 
     suspend fun consumeHint(): Boolean {
