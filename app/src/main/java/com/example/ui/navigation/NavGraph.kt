@@ -278,18 +278,16 @@ fun MemoryQuestNavGraph(
                 onRevealPair = { gameViewModel.useRevealPair() },
                 onFreezeTimer = { gameViewModel.freezeTimer() },
                 onNextLevel = {
-                    mainViewModel.showInterstitialAd(context.findActivity()) {
+                    mainViewModel.showNextLevelInterstitial(context.findActivity()) {
                         gameViewModel.nextLevel()
                     }
                 },
                 onRestartLevel = {
-                    mainViewModel.showInterstitialAd(context.findActivity()) {
-                        gameViewModel.restartLevel()
-                    }
+                    gameViewModel.restartLevel()
                 },
                 onGoToShop = { navController.navigate(Screen.Shop.route) },
                 onBackToHome = {
-                    mainViewModel.showInterstitialAd(context.findActivity()) {
+                    mainViewModel.showBackToHomeInterstitial(context.findActivity()) {
                         navController.popBackStack(Screen.Home.route, false)
                     }
                 },

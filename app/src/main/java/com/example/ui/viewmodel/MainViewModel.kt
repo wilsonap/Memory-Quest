@@ -67,13 +67,44 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         interstitialManager.loadAd()
     }
 
+    private var lastInterstitialTime: Long = 0
+    private var levelsCompletedCount: Int = 0
+    private val minInterstitialIntervalMs = 120_000L // 2 minutos de intervalo mínimo ao voltar ao menu
+
     fun showInterstitialAd(activity: Activity?, onAdDismissed: () -> Unit) {
         if (isAdsRemoved.value || !AdMobConfig.ADS_ENABLED) {
             onAdDismissed()
             return
         }
         if (activity != null) {
-            interstitialManager.show(activity, onAdDismissed)
+            interstitialManager.show(activity) {
+                lastInterstitialTime = System.currentTimeMillis()
+                onAdDismissed()
+            }
+        } else {
+            onAdDismissed()
+        }
+    }
+
+    fun showNextLevelInterstitial(activity: Activity?, onAdDismissed: () -> Unit) {
+        levelsCompletedCount++
+        if (levelsCompletedCount >= 2 && (System.currentTimeMillis() - lastInterstitialTime >= 60_000L)) {
+            showInterstitialAd(activity) {
+                levelsCompletedCount = 0
+                onAdDismissed()
+            }
+        } else {
+            onAdDismissed()
+        }
+    }
+
+    fun showBackToHomeInterstitial(activity: Activity?, onAdDismissed: () -> Unit) {
+        val now = System.currentTimeMillis()
+        if (now - lastInterstitialTime >= minInterstitialIntervalMs) {
+            showInterstitialAd(activity) {
+                levelsCompletedCount = 0
+                onAdDismissed()
+            }
         } else {
             onAdDismissed()
         }
