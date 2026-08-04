@@ -12,23 +12,44 @@ class MemoryQuestApplication : Application() {
     override fun onCreate() {
         super.onCreate()
 
-        FirebaseApp.initializeApp(this)
+        val firebaseApp = FirebaseApp.initializeApp(this)
 
-        val appCheck = FirebaseAppCheck.getInstance()
+        if (firebaseApp == null) {
+            Log.e(
+                "MemoryQuestFirebase",
+                "FirebaseApp.initializeApp retornou null. Verifique google-services.json e o plugin google-services."
+            )
+            return
+        }
 
-        if (BuildConfig.DEBUG) {
-            try {
-                val clazz = Class.forName("com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory")
-                val method = clazz.getMethod("getInstance")
-                val factory = method.invoke(null) as AppCheckProviderFactory
-                appCheck.installAppCheckProviderFactory(factory)
-                Log.d("MemoryQuestApp", "DebugAppCheckProviderFactory instanciado com sucesso em DEBUG.")
-            } catch (e: Exception) {
-                Log.e("MemoryQuestApp", "Falha ao instanciar DebugAppCheckProviderFactory: ${e.message}", e)
+        try {
+            val appCheck = FirebaseAppCheck.getInstance(firebaseApp)
+
+            if (BuildConfig.DEBUG) {
+                try {
+                    val clazz = Class.forName("com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory")
+                    val method = clazz.getMethod("getInstance")
+                    val factory = method.invoke(null) as AppCheckProviderFactory
+                    appCheck.installAppCheckProviderFactory(factory)
+                    Log.d("MemoryQuestFirebase", "DebugAppCheckProviderFactory instanciado com sucesso em DEBUG.")
+                } catch (e: Exception) {
+                    Log.e("MemoryQuestFirebase", "Falha ao instanciar DebugAppCheckProviderFactory: ${e.message}", e)
+                }
+            } else {
+                appCheck.installAppCheckProviderFactory(
+                    PlayIntegrityAppCheckProviderFactory.getInstance()
+                )
             }
-        } else {
-            appCheck.installAppCheckProviderFactory(
-                PlayIntegrityAppCheckProviderFactory.getInstance()
+
+            Log.i(
+                "MemoryQuestFirebase",
+                "Firebase e App Check inicializados com sucesso."
+            )
+        } catch (e: Exception) {
+            Log.e(
+                "MemoryQuestFirebase",
+                "Falha ao inicializar App Check.",
+                e
             )
         }
     }
