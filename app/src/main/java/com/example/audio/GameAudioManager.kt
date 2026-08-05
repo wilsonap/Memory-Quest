@@ -47,19 +47,20 @@ enum class MusicTrack {
 class GameAudioManager private constructor(private val context: Context) {
 
     companion object {
-        private const val TAG = "MemoryQuestSFX"
+        private const val TAG = "MemoryQuestAudio"
 
         @Volatile
         private var INSTANCE: GameAudioManager? = null
 
         fun getInstance(context: Context): GameAudioManager {
             return INSTANCE ?: synchronized(this) {
-                val appContext = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    context.applicationContext.createAttributionContext("default")
-                } else {
-                    context.applicationContext
+                // Use plain applicationContext for SoundPool.load / openRawResourceFd.
+                // AttributionContext is not required for SFX and can interfere on some APIs.
+                val appContext = context.applicationContext
+                INSTANCE ?: GameAudioManager(appContext).also {
+                    INSTANCE = it
+                    Log.i(TAG, "GameAudioManager criado | sdk=${Build.VERSION.SDK_INT} | pkg=${appContext.packageName}")
                 }
-                INSTANCE ?: GameAudioManager(appContext).also { INSTANCE = it }
             }
         }
     }
@@ -90,8 +91,12 @@ class GameAudioManager private constructor(private val context: Context) {
 
     @Synchronized
     private fun ensureSoundPoolReady() {
-        if (soundPool != null && !isReleased) return
+        if (soundPool != null && !isReleased) {
+            Log.d(TAG, "ensureSoundPoolReady() SKIP: pool ja pronto isReleased=$isReleased")
+            return
+        }
 
+        Log.i(TAG, "ensureSoundPoolReady() CRIANDO SoundPool | isReleased=$isReleased poolWasNull=${soundPool == null}")
         isReleased = false
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_GAME)
@@ -106,13 +111,15 @@ class GameAudioManager private constructor(private val context: Context) {
         sp.setOnLoadCompleteListener { _, sampleId, status ->
             if (status == 0) {
                 loadedSoundIds.add(sampleId)
-                Log.d(TAG, "onLoadComplete SUCCESS: soundId=$sampleId, status=$status")
+                Log.i(TAG, "OnLoadComplete SUCCESS: soundId=$sampleId, status=$status | loadedCount=${loadedSoundIds.size}")
             } else {
-                Log.e(TAG, "onLoadComplete FAILED: soundId=$sampleId, status=$status")
+                // status=-10000 == AMEDIA_ERROR_UNKNOWN (decode falhou: MP3 corrompido / sem frame MPEG)
+                Log.e(TAG, "OnLoadComplete FAILED: soundId=$sampleId, status=$status (0=ok, -10000=AMEDIA_ERROR_UNKNOWN/decode)")
             }
         }
 
         soundPool = sp
+        Log.i(TAG, "SoundPool criado")
         loadSoundEffects()
     }
 
@@ -125,19 +132,19 @@ class GameAudioManager private constructor(private val context: Context) {
             launch {
                 dataStoreManager.soundEnabled.collectLatest { enabled ->
                     isSoundEnabled = enabled
-                    Log.d(TAG, "Setting updated - soundEnabled: $isSoundEnabled")
+                    Log.i(TAG, "prefs soundEffectsEnabled=$isSoundEnabled (salvo/lido do DataStore, default=true)")
                 }
             }
             launch {
                 dataStoreManager.vibrationEnabled.collectLatest { enabled ->
                     isVibrationEnabled = enabled
-                    Log.d(TAG, "Setting updated - vibrationEnabled: $isVibrationEnabled")
+                    Log.d(TAG, "prefs vibrationEnabled=$isVibrationEnabled")
                 }
             }
             launch {
                 dataStoreManager.sfxVolume.collectLatest { vol ->
                     sfxVolume = vol.coerceIn(0f, 1f)
-                    Log.d(TAG, "Setting updated - sfxVolume: $sfxVolume")
+                    Log.i(TAG, "prefs soundEffectsVolume=$sfxVolume (default=0.8)")
                 }
             }
         }
@@ -170,23 +177,30 @@ class GameAudioManager private constructor(private val context: Context) {
                 val existingSoundId = resToSoundIdMap[resId]
                 if (existingSoundId != null) {
                     soundMap[effect] = existingSoundId
-                    Log.d(TAG, "loadSoundEffects (reused): effect=${effect.name}, resId=$resId -> soundId=$existingSoundId")
+                    Log.d(TAG, "load() reused: effect=${effect.name}, resId=$resId -> soundId=$existingSoundId")
                 } else {
                     try {
+                        val afd = context.resources.openRawResourceFd(resId)
+                        val afdInfo = if (afd != null) {
+                            "afdLen=${afd.length} afdOffset=${afd.startOffset}"
+                        } else {
+                            "afd=NULL"
+                        }
+                        afd?.close()
                         val soundId = sp.load(context, resId, 1)
                         if (soundId != 0) {
                             resToSoundIdMap[resId] = soundId
                             soundMap[effect] = soundId
-                            Log.d(TAG, "loadSoundEffects: effect=${effect.name}, resName=$actualResName, resId=$resId -> soundId=$soundId")
+                            Log.i(TAG, "load(): effect=${effect.name}, resName=$actualResName, resId=$resId -> soundId=$soundId | $afdInfo")
                         } else {
-                            Log.e(TAG, "loadSoundEffects FAILED: effect=${effect.name}, resId=$resId returned soundId=0")
+                            Log.e(TAG, "load() FAILED soundId=0: effect=${effect.name}, resId=$resId | $afdInfo")
                         }
                     } catch (e: Exception) {
-                        Log.w(TAG, "loadSoundEffects: Falha ao carregar SFX $actualResName", e)
+                        Log.w(TAG, "load(): Falha ao carregar SFX $actualResName", e)
                     }
                 }
             } else {
-                Log.w(TAG, "loadSoundEffects: Recurso raw/${effect.resName} NAO ENCONTRADO em res/raw")
+                Log.w(TAG, "load(): resId=0 para raw/${effect.resName} (recurso ausente no APK)")
             }
         }
     }
@@ -199,13 +213,18 @@ class GameAudioManager private constructor(private val context: Context) {
             vibrateForEffect(effect)
         }
 
+        Log.d(
+            TAG,
+            "play() request effect=${effect.name} | soundEffectsEnabled=$isSoundEnabled | sfxVolume=$sfxVolume | vibrationEnabled=$isVibrationEnabled"
+        )
+
         if (!isSoundEnabled) {
-            Log.d(TAG, "playSfx SKIPPED: soundEffectsEnabled=false for effect=${effect.name}")
+            Log.d(TAG, "play() SKIPPED: soundEffectsEnabled=false for effect=${effect.name}")
             return
         }
 
         if (sfxVolume <= 0f) {
-            Log.d(TAG, "playSfx SKIPPED: sfxVolume=0.0 for effect=${effect.name}")
+            Log.d(TAG, "play() SKIPPED: sfxVolume=0.0 for effect=${effect.name}")
             return
         }
 
@@ -214,28 +233,38 @@ class GameAudioManager private constructor(private val context: Context) {
         val now = System.currentTimeMillis()
         val lastTime = lastPlayTimes[effect] ?: 0L
         if (now - lastTime < effect.cooldownMs) {
-            Log.d(TAG, "playSfx THROTTLED: effect=${effect.name}, delta=${now - lastTime}ms < cooldown=${effect.cooldownMs}ms")
+            Log.d(TAG, "play() THROTTLED: effect=${effect.name}, delta=${now - lastTime}ms < cooldown=${effect.cooldownMs}ms")
             return
         }
         lastPlayTimes[effect] = now
 
         val soundId = soundMap[effect]
         if (soundId == null || soundId == 0) {
-            Log.w(TAG, "playSfx FAILED: soundId nao encontrado para ${effect.name} (resName=${effect.resName})")
+            Log.w(TAG, "play() FAILED: soundId ausente para ${effect.name} (resName=${effect.resName})")
             return
         }
 
         if (!loadedSoundIds.contains(soundId)) {
-            Log.w(TAG, "playSfx REJECTED: soundId=$soundId para ${effect.name} ainda nao concluiu onLoadComplete!")
+            Log.w(
+                TAG,
+                "play() REJECTED: soundId=$soundId effect=${effect.name} nao esta em loadedSoundIds (OnLoadComplete falhou ou pendente) | loaded=${loadedSoundIds.size}"
+            )
             return
         }
 
         val volume = sfxVolume.coerceIn(0f, 1f)
+        // play(soundId, leftVolume, rightVolume, priority, loop, rate)
         val streamId = soundPool?.play(soundId, volume, volume, 1, 0, 1.0f) ?: 0
         if (streamId == 0) {
-            Log.e(TAG, "playSfx FAILED (streamId=0): effect=${effect.name}, soundId=$soundId, volume=$volume")
+            Log.e(
+                TAG,
+                "play() FAILED streamId=0: effect=${effect.name}, soundId=$soundId, left=$volume, right=$volume, priority=1, loop=0, rate=1.0 | poolNull=${soundPool == null}"
+            )
         } else {
-            Log.d(TAG, "playSfx PLAYING: effect=${effect.name}, resName=${effect.resName}, soundId=$soundId, volume=$volume, streamId=$streamId")
+            Log.i(
+                TAG,
+                "play() OK: effect=${effect.name}, soundId=$soundId, left=$volume, right=$volume, priority=1, loop=0, rate=1.0, streamId=$streamId"
+            )
         }
     }
 
@@ -321,6 +350,7 @@ class GameAudioManager private constructor(private val context: Context) {
     fun onAppBackground() {}
 
     fun release() {
+        Log.i(TAG, "release() / SoundPool destruído")
         try {
             isReleased = true
             soundPool?.release()

@@ -9,6 +9,7 @@ class MemoryQuestApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        Log.i("MemoryQuestAudio", "Application criada | ${javaClass.simpleName}")
 
         try {
             var firebaseApp = FirebaseApp.initializeApp(this)

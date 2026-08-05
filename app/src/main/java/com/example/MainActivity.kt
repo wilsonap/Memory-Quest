@@ -34,6 +34,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        android.util.Log.i("MemoryQuestAudio", "MainActivity criada")
         enableEdgeToEdge()
 
         if (!FirebaseBootstrap.isReady) {

@@ -1,0 +1,8 @@
+# Prevent UTF-8 text mangling of binary audio (EF BF BD corruption)
+*.mp3 binary
+*.ogg binary
+*.wav binary
+*.mp4 binary
+*.aab binary
+*.apk binary
+*.jks binary
