@@ -13,6 +13,9 @@ object AdMobConfig {
     private const val TEST_APP_ID = "ca-app-pub-3940256099942544~3347511713"
     private const val TEST_BANNER_ID = "ca-app-pub-3940256099942544/6300978111"
     private const val TEST_REWARDED_ID = "ca-app-pub-3940256099942544/5224354917"
+    private const val TEST_INTERSTITIAL_ID = "ca-app-pub-3940256099942544/1033173712"
+    private const val TEST_APP_OPEN_ID = "ca-app-pub-3940256099942544/9257395921"
+    private const val TEST_REWARDED_INTERSTITIAL_ID = "ca-app-pub-3940256099942544/5354046379"
 
     // --- PRODUCTION REAL ADMOB IDs ---
     private const val PROD_APP_ID = "ca-app-pub-9508188839425769~9719772999"
@@ -30,4 +33,13 @@ object AdMobConfig {
 
     val rewardedId: String
         get() = if (isDebugMode || PROD_REWARDED_ID.contains("0000000000")) TEST_REWARDED_ID else PROD_REWARDED_ID
+
+    val interstitialId: String
+        get() = TEST_INTERSTITIAL_ID
+
+    val appOpenId: String
+        get() = TEST_APP_OPEN_ID
+
+    val rewardedInterstitialId: String
+        get() = TEST_REWARDED_INTERSTITIAL_ID
 }

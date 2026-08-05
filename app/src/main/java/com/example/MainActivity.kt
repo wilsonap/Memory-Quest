@@ -37,28 +37,47 @@ class MainActivity : AppCompatActivity() {
         enableEdgeToEdge()
 
         if (!FirebaseBootstrap.isReady) {
-            setContent {
-                MemoryQuestTheme {
-                    FirebaseConfigErrorScreen()
+            try {
+                val app = com.google.firebase.FirebaseApp.initializeApp(this)
+                    ?: com.google.firebase.FirebaseApp.getApps(this).firstOrNull()
+                if (app != null) {
+                    FirebaseBootstrap.markReady()
+                }
+            } catch (e: Throwable) {
+                android.util.Log.w("MainActivity", "Firebase fallback initialization: ${e.message}")
+            }
+        }
+
+        // Garante criação dos ViewModels na thread principal
+        try {
+            mainViewModel
+            gameViewModel
+        } catch (e: Throwable) {
+            android.util.Log.e("MainActivity", "Erro ao acessar ViewModels: ${e.message}", e)
+        }
+
+        // Initialize AdMob & check Google UMP consent safely
+        try {
+            AdMobManager.requestConsentAndInitialize(this)
+        } catch (e: Throwable) {
+            android.util.Log.w("MainActivity", "Erro ao inicializar AdMobManager: ${e.message}")
+        }
+
+        // Initialize offline sync connectivity observer safely
+        try {
+            connectivityObserver = ConnectivityObserver(applicationContext) {
+                try {
+                    SyncManager.triggerImmediateSync(applicationContext)
+                    com.example.sync.EnsureLeaderboardWorker.schedule(applicationContext)
+                    mainViewModel.syncLeaderboard()
+                } catch (e: Throwable) {
+                    android.util.Log.w("MainActivity", "Erro no callback de conectividade: ${e.message}")
                 }
             }
-            return
+            connectivityObserver.startListening()
+        } catch (e: Throwable) {
+            android.util.Log.w("MainActivity", "Erro ao iniciar ConnectivityObserver: ${e.message}")
         }
-
-        // Garante criação dos ViewModels na thread principal antes do callback de rede
-        mainViewModel
-        gameViewModel
-
-        // Initialize AdMob & check Google UMP consent
-        AdMobManager.requestConsentAndInitialize(this)
-
-        // Initialize offline sync connectivity observer
-        connectivityObserver = ConnectivityObserver(applicationContext) {
-            SyncManager.triggerImmediateSync(applicationContext)
-            com.example.sync.EnsureLeaderboardWorker.schedule(applicationContext)
-            mainViewModel.syncLeaderboard()
-        }
-        connectivityObserver.startListening()
 
         setContent {
             val language by mainViewModel.language.collectAsStateWithLifecycle()

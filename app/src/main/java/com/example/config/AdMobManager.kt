@@ -51,7 +51,7 @@ object AdMobManager {
                     }
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Log.e(TAG, "Erro ao inicializar Mobile Ads: ${e.message}", e)
         }
     }
@@ -98,7 +98,7 @@ object AdMobManager {
                     onComplete?.invoke(canRequest)
                 }
             )
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Log.e(TAG, "Exceção ao solicitar consentimento UMP: ${e.message}", e)
             onComplete?.invoke(canRequestAdsState)
         }
