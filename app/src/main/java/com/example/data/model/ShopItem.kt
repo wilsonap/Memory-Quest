@@ -7,8 +7,8 @@ enum class ShopCategory { BOOSTER, THEME, FRAME, EFFECT }
 
 data class ShopItem(
     val id: String,
-    @StringRes val titleRes: Int,
-    @StringRes val descriptionRes: Int,
+    @param:StringRes val titleRes: Int,
+    @param:StringRes val descriptionRes: Int,
     val price: Int,
     val category: ShopCategory,
     val iconName: String,

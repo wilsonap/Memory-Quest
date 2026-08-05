@@ -30,12 +30,8 @@ class AvatarStorageManager(private val context: Context) {
     }
 
     fun isCustomAvatarFileValid(path: String?): Boolean {
-        if (path.isNull_or_blank()) return false
-        val file = File(path)
+        val validPath = path?.takeIf { it.isNotBlank() } ?: return false
+        val file = File(validPath)
         return file.exists() && file.length() > 0
     }
-}
-
-private fun String?.isNull_or_blank(): Boolean {
-    return this == null || this.trim().isEmpty()
 }

@@ -88,9 +88,24 @@ Só `music_home.mp3` era válido no histórico.
 
 ---
 
-## 6. Próximos passos recomendados
+## 6. Validação pós-correção (Mi 9T, API 29)
 
-1. Rebuild/install debug e filtrar logcat: `MemoryQuestAudio`
-2. Confirmar `OnLoadComplete SUCCESS` e `play() OK`
-3. Reexportar BGM distintos (game/shop/ranking/victory/defeat) como MP3 binários válidos
-4. Nunca abrir/salvar `.mp3` em editor de texto; manter `.gitattributes`
+```
+OnLoadComplete SUCCESS: soundId=1..10, status=0 | loadedCount=10
+prefs soundEffectsEnabled=true
+prefs soundEffectsVolume=0.8
+play() OK: effect=BUTTON_CLICK, soundId=6, left=0.8, right=0.8,
+           priority=1, loop=0, rate=1.0, streamId=1
+```
+
+Antes: `status=-10000` em todos → nenhum play.  
+Depois: `status=0` + `streamId=1` → SFX funcionando.
+
+---
+
+## 7. Próximos passos
+
+1. Reexportar BGM distintos (hoje são cópia provisória de `music_home.mp3`)
+2. Manter `.gitattributes` (`*.mp3 binary`)
+3. Remover logs `MemoryQuestAudio` verbosos quando estabilizar
+4. Não reintroduzir assets via editor de texto / conversão UTF-8

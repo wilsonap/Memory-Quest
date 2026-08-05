@@ -5,9 +5,9 @@ import com.example.R
 
 data class GameTheme(
     val id: String,
-    @StringRes val nameRes: Int,
+    @param:StringRes val nameRes: Int,
     val category: String,
-    @StringRes val descriptionRes: Int,
+    @param:StringRes val descriptionRes: Int,
     val priceCoins: Int,
     val symbols: List<Pair<String, String>>, // Symbol and display name
     val primaryColorHex: Long = 0xFF7209B7,
