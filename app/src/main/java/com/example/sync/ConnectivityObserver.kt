@@ -1,8 +1,6 @@
 package com.example.sync
 
 import android.content.Context
-import android.os.Handler
-import android.os.Looper
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -16,7 +14,6 @@ class ConnectivityObserver(
         context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
-    private val mainHandler = Handler(Looper.getMainLooper())
 
     fun isNetworkAvailable(): Boolean {
         val network = connectivityManager.activeNetwork ?: return false
@@ -33,7 +30,7 @@ class ConnectivityObserver(
         val builder = NetworkRequest.Builder()
         networkCallback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
-                mainHandler.post { onNetworkAvailable() }
+                onNetworkAvailable()
             }
         }
         connectivityManager.registerNetworkCallback(builder.build(), networkCallback!!)
