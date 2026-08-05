@@ -40,6 +40,9 @@
     <string name="settings_visual_language_title">Visual e Idioma</string>
     <string name="settings_language">Idioma</string>
     <string name="settings_theme">Tema</string>
+    <string name="settings_theme_light">Claro</string>
+    <string name="settings_theme_dark">Escuro</string>
+    <string name="settings_theme_system">Sistema</string>
 
     <!-- Links -->
     <string name="settings_privacy_policy">Política de Privacidade</string>
@@ -215,25 +218,4 @@
     <string name="consent_status_synced">Sincronizado</string>
     <string name="consent_status_pending">Pendente (Offline)</string>
     <string name="consent_delete_data_info">Para retirar o consentimento ou solicitar a exclusão de dados, acesse a Exclusão e Reinício de Dados.</string>
-
-    <!-- Exclusão de conta -->
-    <string name="delete_account_menu_title">Excluir conta e todos os dados</string>
-    <string name="reset_game_menu_title">Reiniciar progresso do jogo</string>
-    <string name="delete_account_title">Excluir conta?</string>
-    <string name="delete_account_message">Esta ação é permanente e removerá:\n• sua conta anônima do Firebase;\n• ranking;\n• nome de usuário;\n• progresso;\n• estatísticas;\n• consentimentos;\n• todos os dados sincronizados.\n\nEsta ação não pode ser desfeita.</string>
-    <string name="delete_account_confirm">Excluir definitivamente</string>
-    <string name="delete_account_final_title">Confirmação final</string>
-    <string name="delete_account_final_message">Esta ação é permanente e não poderá ser desfeita.\n\nPara confirmar a exclusão da sua conta, digite:\n\nEXCLUIR</string>
-    <string name="delete_account_final_confirm">Excluir conta</string>
-    <string name="delete_account_confirmation_keyword">EXCLUIR</string>
-    <string name="delete_account_confirmation_hint">Digite EXCLUIR</string>
-    <string name="delete_account_cancel">Cancelar</string>
-    <string name="delete_account_in_progress">Excluindo…</string>
-    <string name="delete_account_success">Conta excluída com sucesso.</string>
-    <string name="delete_account_error_no_internet">Conecte-se à internet para excluir sua conta.</string>
-    <string name="delete_account_error_permission">Não foi possível excluir seus dados no servidor.</string>
-    <string name="delete_account_error_invalid_session">Sua sessão não é mais válida. Reinicie o aplicativo e tente novamente.</string>
-    <string name="delete_account_error_recent_login">Por segurança, reinicie o aplicativo e tente excluir a conta novamente.</string>
-    <string name="delete_account_error_auth">Os dados foram removidos, mas não foi possível excluir a conta. Tente novamente.</string>
-    <string name="delete_account_error_generic">Não foi possível excluir todos os seus dados. Nenhuma alteração foi concluída. Tente novamente.</string>
 </resources>

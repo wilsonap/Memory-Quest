@@ -52,6 +52,9 @@ interface MemoryQuestDao {
     @Query("UPDATE player SET extraLives = :count WHERE id = 1")
     suspend fun setExtraLives(count: Int)
 
+    @Query("DELETE FROM player")
+    suspend fun clearPlayer()
+
 
     // --- Statistics ---
     @Query("SELECT * FROM statistics WHERE id = 1")
@@ -62,6 +65,9 @@ interface MemoryQuestDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdateStatistics(stats: StatisticsEntity)
+
+    @Query("DELETE FROM statistics")
+    suspend fun clearStatistics()
 
 
     // --- Unlocked Themes ---
@@ -74,6 +80,9 @@ interface MemoryQuestDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun unlockTheme(theme: UnlockedThemeEntity)
 
+    @Query("DELETE FROM unlocked_themes")
+    suspend fun clearUnlockedThemes()
+
 
     // --- Inventory ---
     @Query("SELECT * FROM inventory")
@@ -84,6 +93,9 @@ interface MemoryQuestDao {
 
     @Query("SELECT * FROM inventory WHERE itemId = :itemId")
     suspend fun getInventoryItem(itemId: String): InventoryEntity?
+
+    @Query("DELETE FROM inventory")
+    suspend fun clearInventory()
 
 
     // --- Achievements ---
@@ -99,18 +111,6 @@ interface MemoryQuestDao {
     @Update
     suspend fun updateAchievement(achievement: AchievementEntity)
 
-    @Query("DELETE FROM unlocked_themes")
-    suspend fun clearUnlockedThemes()
-
-    @Query("DELETE FROM inventory")
-    suspend fun clearInventory()
-
     @Query("DELETE FROM achievements")
     suspend fun clearAchievements()
-
-    @Query("DELETE FROM player")
-    suspend fun deleteAllPlayers()
-
-    @Query("DELETE FROM statistics")
-    suspend fun deleteAllStatistics()
 }
