@@ -22,25 +22,23 @@ object AdMobManager {
      * Configura o Mobile Ads SDK com tratamento não personalizado e inicializa.
      */
     fun initialize(context: Context) {
+        val appContext = context.applicationContext
         if (isInitialized.getAndSet(true)) {
             return
         }
 
         try {
-            // Configurar tratamento não personalizado de anúncios antes da inicialização/solicitações
-            val builder = MobileAds.getRequestConfiguration().toBuilder()
-                .setPublisherPrivacyPersonalizationState(
-                    RequestConfiguration.PublisherPrivacyPersonalizationState.DISABLED
-                )
+            val variant = if (BuildConfig.DEBUG) "DEBUG (ID Teste)" else "RELEASE (ID Produção)"
+            Log.d(TAG, "Inicialização solicitada. Variante: $variant")
 
             if (BuildConfig.DEBUG) {
-                builder.setTestDeviceIds(listOf(AdRequest.DEVICE_ID_EMULATOR))
+                val builder = MobileAds.getRequestConfiguration().toBuilder()
+                    .setTestDeviceIds(listOf(AdRequest.DEVICE_ID_EMULATOR))
+                MobileAds.setRequestConfiguration(builder.build())
             }
 
-            MobileAds.setRequestConfiguration(builder.build())
-
-            MobileAds.initialize(context) { initializationStatus ->
-                Log.d(TAG, "Mobile Ads inicializado com sucesso.")
+            MobileAds.initialize(appContext) { initializationStatus ->
+                Log.d(TAG, "Mobile Ads inicialização concluída com sucesso.")
                 if (BuildConfig.DEBUG) {
                     val statusMap = initializationStatus.adapterStatusMap
                     for ((adapterClass, status) in statusMap) {

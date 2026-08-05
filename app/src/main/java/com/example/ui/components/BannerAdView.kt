@@ -121,6 +121,20 @@ fun BannerAdContainer(
 }
 
 /**
+ * Componente oficial de banner AdMob para Jetpack Compose.
+ */
+@Composable
+fun BannerAd(
+    isPremium: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    BannerAdContainer(
+        isAdsRemoved = isPremium,
+        modifier = modifier
+    )
+}
+
+/**
  * Alias de compatibilidade para reutilização direta do BannerAdContainer.
  */
 @Composable

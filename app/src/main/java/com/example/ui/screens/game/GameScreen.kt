@@ -180,8 +180,6 @@ fun GameScreen(
                         )
                     }
                 }
-
-                BannerAdContainer(isAdsRemoved = isAdsRemoved)
             }
         },
         modifier = modifier.fillMaxSize()
@@ -437,9 +435,6 @@ fun GameScreen(
                                     Text("Menu", color = Color.White)
                                 }
                             }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-                            BannerAdContainer(isAdsRemoved = isAdsRemoved)
                         }
                     }
                 }

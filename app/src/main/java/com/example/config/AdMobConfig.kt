@@ -29,7 +29,7 @@ object AdMobConfig {
         get() = if (isDebugMode || PROD_APP_ID.contains("0000000000")) TEST_APP_ID else PROD_APP_ID
 
     val bannerId: String
-        get() = if (isDebugMode || PROD_BANNER_ID.contains("0000000000")) TEST_BANNER_ID else PROD_BANNER_ID
+        get() = BuildConfig.BANNER_AD_UNIT_ID
 
     val rewardedId: String
         get() = if (isDebugMode || PROD_REWARDED_ID.contains("0000000000")) TEST_REWARDED_ID else PROD_REWARDED_ID

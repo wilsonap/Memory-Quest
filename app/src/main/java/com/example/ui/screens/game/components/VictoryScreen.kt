@@ -668,9 +668,6 @@ fun VictoryScreen(
                                         )
                                     }
                                 }
-
-                                Spacer(modifier = Modifier.height(12.dp))
-                                BannerAdContainer(isAdsRemoved = isAdsRemoved)
                             }
                         }
                     }

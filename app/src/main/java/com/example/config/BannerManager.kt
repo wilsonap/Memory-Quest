@@ -18,6 +18,14 @@ class BannerManager(
 ) {
     private var adView: AdView? = null
 
+    private fun getMaskedAdUnitId(): String {
+        return if (BuildConfig.DEBUG || adUnitId.contains("3940256099942544")) {
+            "TEST_AD_UNIT ($adUnitId)"
+        } else {
+            "PRODUCTION_AD_UNIT (***${adUnitId.takeLast(6)})"
+        }
+    }
+
     fun createAdView(adSize: AdSize): AdView {
         val view = AdView(context).apply {
             setAdSize(adSize)
@@ -25,7 +33,7 @@ class BannerManager(
             adListener = object : AdListener() {
                 override fun onAdLoaded() {
                     onAdLoadedStateChange(true)
-                    Log.d(TAG, "onAdLoaded - Banner $adUnitId carregado com sucesso.")
+                    Log.d(TAG, "onAdLoaded - Banner ${getMaskedAdUnitId()} (largura: ${adSize.width}) carregado com sucesso.")
                 }
 
                 override fun onAdFailedToLoad(loadAdError: LoadAdError) {
@@ -68,7 +76,7 @@ class BannerManager(
 
         android.os.Handler(android.os.Looper.getMainLooper()).post {
             try {
-                Log.d(TAG, "Banner solicitado: adUnitId=$adUnitId")
+                Log.d(TAG, "Banner solicitado: unit=${getMaskedAdUnitId()}")
                 adView?.loadAd(AdRequest.Builder().build())
             } catch (e: Exception) {
                 Log.e(TAG, "Exceção ao carregar banner AdMob: ${e.message}", e)

@@ -12,6 +12,12 @@ class MemoryQuestApplication : Application() {
         Log.i("MemoryQuestAudio", "Application criada | ${javaClass.simpleName}")
 
         try {
+            com.example.config.AdMobManager.initialize(this)
+        } catch (e: Throwable) {
+            Log.w("MemoryQuestAds", "Erro ao inicializar AdMobManager na Application: ${e.message}")
+        }
+
+        try {
             var firebaseApp = FirebaseApp.initializeApp(this)
 
             if (firebaseApp == null) {

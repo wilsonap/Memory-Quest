@@ -19,6 +19,8 @@ android {
     versionName = "1.1.6"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    manifestPlaceholders["admobAppId"] = "ca-app-pub-9508188839425769~9719772999"
+    buildConfigField("String", "BANNER_AD_UNIT_ID", "\"ca-app-pub-9508188839425769/6933827559\"")
   }
 
   signingConfigs {
@@ -32,7 +34,13 @@ android {
   }
 
   buildTypes {
+    debug {
+      manifestPlaceholders["admobAppId"] = "ca-app-pub-3940256099942544~3347511713"
+      buildConfigField("String", "BANNER_AD_UNIT_ID", "\"ca-app-pub-3940256099942544/9214589741\"")
+    }
     release {
+      manifestPlaceholders["admobAppId"] = "ca-app-pub-9508188839425769~9719772999"
+      buildConfigField("String", "BANNER_AD_UNIT_ID", "\"ca-app-pub-9508188839425769/6933827559\"")
       isCrunchPngs = false
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
