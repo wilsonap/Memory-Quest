@@ -134,7 +134,6 @@ class MainActivity : AppCompatActivity() {
         if (::connectivityObserver.isInitialized) {
             connectivityObserver.stopListening()
         }
-        GameAudioManager.getInstance(this).release()
     }
 }
 
