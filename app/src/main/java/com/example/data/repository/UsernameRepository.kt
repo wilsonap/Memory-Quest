@@ -4,7 +4,6 @@ import android.util.Log
 import com.example.data.local.dao.MemoryQuestDao
 import com.example.data.local.entity.PlayerEntity
 import com.example.data.model.UsernameStatus
-import com.example.config.FirebaseBootstrap
 import com.example.util.UsernameNormalizer
 import com.example.util.UsernameSuggestionGenerator
 import com.example.util.UsernameValidator
@@ -30,14 +29,9 @@ class NameCooldownException(val remainingMs: Long) : Exception("NAME_COOLDOWN")
 
 class UsernameRepository(
     private val memoryQuestDao: MemoryQuestDao,
-    private val leaderboardRepository: LeaderboardRepository,
-    firestoreProvider: () -> FirebaseFirestore = { FirebaseFirestore.getInstance() }
+    private val leaderboardRepository: LeaderboardRepository = LeaderboardRepository(),
+    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
 ) {
-
-    private val firestore: FirebaseFirestore by lazy {
-        FirebaseBootstrap.requireReady()
-        firestoreProvider()
-    }
 
     companion object {
         private const val LOG_TAG = "MemoryQuestUsername"

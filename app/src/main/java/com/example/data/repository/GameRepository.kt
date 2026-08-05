@@ -28,6 +28,7 @@ class GameRepository(
     val sfxVolume: Flow<Float> = dataStoreManager.sfxVolume
     val isAdsRemoved: Flow<Boolean> = dataStoreManager.isAdsRemoved
     val language: Flow<String> = dataStoreManager.language
+    val darkMode: Flow<String> = dataStoreManager.darkMode
 
     suspend fun ensureInitialized() {
         val player = dao.getPlayer()
@@ -217,6 +218,7 @@ class GameRepository(
     suspend fun setMusicVolume(vol: Float) = dataStoreManager.setMusicVolume(vol)
     suspend fun setSfxVolume(vol: Float) = dataStoreManager.setSfxVolume(vol)
     suspend fun setLanguage(lang: String) = dataStoreManager.setLanguage(lang)
+    suspend fun setDarkMode(mode: String) = dataStoreManager.setDarkMode(mode)
     suspend fun resetDataStore() = dataStoreManager.resetToDefaults()
 
     suspend fun consumeHint(): Boolean {
@@ -248,7 +250,9 @@ class GameRepository(
                 currentLevel = 1,
                 highestLevel = 1,
                 remainingHints = 3,
-                extraLives = 0
+                extraLives = 0,
+                equippedThemeId = GameTheme.ANIMALS.id,
+                equippedFrameId = "frame_classic"
             )
             dao.insertOrUpdatePlayer(resetPlayer)
 
@@ -267,15 +271,24 @@ class GameRepository(
                 correctFlips = 0
             )
             dao.insertOrUpdateStatistics(initialStats)
-        }
-    }
 
-    /** Apaga todo o progresso local após exclusão remota bem-sucedida da conta. */
-    suspend fun wipeAllLocalDataForAccountDeletion() {
-        dao.clearAchievements()
-        dao.clearInventory()
-        dao.clearUnlockedThemes()
-        dao.deleteAllStatistics()
-        dao.deleteAllPlayers()
+            // Clear acquired items/themes and restore initial theme
+            dao.clearInventory()
+            dao.clearUnlockedThemes()
+            dao.unlockTheme(UnlockedThemeEntity(themeId = GameTheme.ANIMALS.id))
+
+            // Reset achievements
+            val defaultAchievements = listOf(
+                AchievementEntity("ach_first_pair", "Primeiro Par", "Encontre seu 1º par de cartas.", "EmojiEvents", 0, 1, false, rewardCoins = 30),
+                AchievementEntity("ach_first_win", "Primeira Vitória", "Conclua a primeira fase com sucesso.", "MilitaryTech", 0, 1, false, rewardCoins = 50),
+                AchievementEntity("ach_flawless", "Mente Perfeita", "Vença uma fase sem cometer nenhum erro.", "AutoAwesome", 0, 1, false, rewardCoins = 100),
+                AchievementEntity("ach_10_levels", "Explorador de Fases", "Chegue até a Fase 10.", "Explore", 0, 10, false, rewardCoins = 200),
+                AchievementEntity("ach_50_levels", "Mestre Supremo", "Alcance a Fase 50.", "MilitaryTech", 0, 50, false, rewardCoins = 500),
+                AchievementEntity("ach_100_pairs", "Colecionador de Pares", "Encontre 100 pares no total.", "Extension", 0, 100, false, rewardCoins = 150),
+                AchievementEntity("ach_1000_coins", "Magnata das Moedas", "Acumule 1000 moedas.", "MonetizationOn", 0, 1000, false, rewardCoins = 300),
+                AchievementEntity("ach_streak_5", "Combo Imparável", "Faça uma sequência de 5 acertos seguidos.", "Bolt", 0, 5, false, rewardCoins = 100)
+            )
+            dao.insertAchievements(defaultAchievements)
+        }
     }
 }
