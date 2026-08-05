@@ -1,13 +1,10 @@
 package com.example.data.repository
 
 import android.util.Log
-import com.example.avatar.util.AvatarStorageManager
-import com.example.data.local.DataStoreManager
-import com.example.data.local.dao.MemoryQuestDao
-import com.example.data.local.dao.PendingSyncDao
 import com.example.data.local.entity.PlayerEntity
 import com.example.data.local.entity.StatisticsEntity
 import com.example.data.model.UsernameStatus
+import com.example.config.FirebaseBootstrap
 import com.example.util.UsernameNormalizer
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
@@ -37,9 +34,19 @@ data class LeaderboardPlayer(
 )
 
 class LeaderboardRepository(
-    private val auth: FirebaseAuth = FirebaseAuth.getInstance(),
-    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
+    authProvider: () -> FirebaseAuth = { FirebaseAuth.getInstance() },
+    firestoreProvider: () -> FirebaseFirestore = { FirebaseFirestore.getInstance() }
 ) {
+
+    private val auth: FirebaseAuth by lazy {
+        FirebaseBootstrap.requireReady()
+        authProvider()
+    }
+
+    private val firestore: FirebaseFirestore by lazy {
+        FirebaseBootstrap.requireReady()
+        firestoreProvider()
+    }
 
     companion object {
         private const val LOG_TAG = "MemoryQuestUsername"
@@ -301,172 +308,6 @@ class LeaderboardRepository(
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e(LOG_TAG, "Erro ao sincronizar leaderboard: ${e.message}", e)
-            Result.failure(e)
-        }
-    }
-
-    /**
-     * Resets remote leaderboard progress to level 1 and 0 points in Firestore.
-     * Preserves uid, name, normalizedName, and avatar.
-     */
-    suspend fun resetLeaderboardProgress(): Result<Unit> {
-        val currentUser = auth.currentUser ?: return Result.failure(IllegalStateException("Sem autenticação disponível"))
-        val uid = currentUser.uid
-
-        return try {
-            val docRef = firestore.collection("leaderboard").document(uid)
-            val snap = docRef.get().await()
-
-            if (!snap.exists()) {
-                Log.d(LOG_TAG, "Documento leaderboard/$uid não existe para redefinir. Retornando sucesso.")
-                return Result.success(Unit)
-            }
-
-            val currentName = snap.getString("name") ?: "Explorador"
-            val currentNormalized = snap.getString("normalizedName") ?: UsernameNormalizer.normalizeUsername(currentName)
-            val currentAvatar = snap.getString("avatarValue") ?: snap.getString("avatar") ?: "avatar_01"
-
-            val resetData = hashMapOf<String, Any>(
-                "uid" to uid,
-                "name" to currentName,
-                "normalizedName" to currentNormalized,
-                "avatar" to currentAvatar,
-                "totalScore" to 0L,
-                "highestLevel" to 1L,
-                "totalPairs" to 0L,
-                "bestStreak" to 0L,
-                "gamesCompleted" to 0L,
-                "updatedAt" to FieldValue.serverTimestamp()
-            )
-
-            docRef.set(resetData, SetOptions.merge()).await()
-            Log.d(LOG_TAG, "Progresso no Firestore (leaderboard/$uid) redefinido com sucesso.")
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Log.e(LOG_TAG, "Erro ao redefinir progresso no Firestore: ${e.message}", e)
-            Result.failure(e)
-        }
-    }
-
-    /**
-     * Exclui permanentemente a conta anônima e todos os dados do usuário (remotos e locais).
-     * Ordem:
-     * 1. usernames/{normalizedName}
-     * 2. leaderboard/{uid}
-     * 3. username_settings/{uid}
-     * 4. user_consents/{uid}
-     * 5. Limpeza de dados locais (Room, DataStore, Avatar)
-     * 6. Exclusão da conta Firebase Auth
-     */
-    suspend fun deleteAccountAndAllData(
-        context: android.content.Context,
-        dataStoreManager: DataStoreManager,
-        avatarStorageManager: AvatarStorageManager,
-        memoryQuestDao: MemoryQuestDao,
-        pendingSyncDao: PendingSyncDao
-    ): Result<Unit> {
-        val DELETE_LOG_TAG = "MemoryQuestDeleteAccount"
-
-        // 1. Connectivity check
-        val isOnline = com.example.sync.ConnectivityObserver(context) {}.isNetworkAvailable()
-        if (!isOnline) {
-            Log.w(DELETE_LOG_TAG, "Exclusão abortada: Aparelho sem conexão com a internet.")
-            return Result.failure(IllegalStateException("Conecte-se à internet para excluir sua conta e seus dados com segurança."))
-        }
-
-        // 2. Auth user check
-        val currentUser = auth.currentUser
-        if (currentUser == null || currentUser.uid.isEmpty()) {
-            Log.w(DELETE_LOG_TAG, "Exclusão abortada: Usuário não autenticado no Firebase Auth.")
-            return Result.failure(IllegalStateException("Conecte-se à internet para excluir sua conta e seus dados com segurança."))
-        }
-
-        val uid = currentUser.uid
-        Log.d(DELETE_LOG_TAG, "Iniciando exclusão permanente de conta e dados para UID: $uid")
-
-        return try {
-            val usernamesDocsToDelete = mutableSetOf<String>()
-            var activeUsername = ""
-
-            // Read leaderboard/{uid}
-            val leaderboardRef = firestore.collection("leaderboard").document(uid)
-            val leaderboardSnap = leaderboardRef.get().await()
-            if (leaderboardSnap.exists()) {
-                activeUsername = leaderboardSnap.getString("name") ?: ""
-                val norm = leaderboardSnap.getString("normalizedName") ?: ""
-                if (norm.isNotEmpty()) {
-                    usernamesDocsToDelete.add(norm)
-                }
-            }
-
-            // Search usernames collection where uid == uid
-            val usernamesQuerySnap = firestore.collection("usernames")
-                .whereEqualTo("uid", uid)
-                .get()
-                .await()
-
-            for (doc in usernamesQuerySnap.documents) {
-                usernamesDocsToDelete.add(doc.id)
-                if (activeUsername.isEmpty()) {
-                    activeUsername = doc.getString("name") ?: ""
-                }
-            }
-
-            // Search local player entity
-            val localPlayer = memoryQuestDao.getPlayer()
-            if (localPlayer != null) {
-                if (activeUsername.isEmpty()) activeUsername = localPlayer.name
-                if (localPlayer.confirmedNormalizedName.isNotEmpty()) usernamesDocsToDelete.add(localPlayer.confirmedNormalizedName)
-                if (localPlayer.pendingNormalizedName.isNotEmpty()) usernamesDocsToDelete.add(localPlayer.pendingNormalizedName)
-                val localNorm = UsernameNormalizer.normalizeUsername(localPlayer.name)
-                if (localNorm.isNotEmpty()) usernamesDocsToDelete.add(localNorm)
-            }
-
-            Log.d(
-                DELETE_LOG_TAG,
-                "UID: $uid | Username: '$activeUsername' | Documentos em 'usernames' encontrados: $usernamesDocsToDelete"
-            )
-
-            // Prepare batch
-            Log.d(DELETE_LOG_TAG, "batch iniciado: adicionando exclusões no Firestore...")
-            val batch = firestore.batch()
-
-            val usernameSettingsRef = firestore.collection("username_settings").document(uid)
-            val userConsentsRef = firestore.collection("user_consents").document(uid)
-
-            batch.delete(leaderboardRef)
-            batch.delete(usernameSettingsRef)
-            batch.delete(userConsentsRef)
-
-            for (uDocId in usernamesDocsToDelete) {
-                val uRef = firestore.collection("usernames").document(uDocId)
-                batch.delete(uRef)
-            }
-
-            // Execute batch commit
-            batch.commit().await()
-            Log.d(DELETE_LOG_TAG, "batch concluído com sucesso no Firestore.")
-
-            // Clear local data
-            Log.d(DELETE_LOG_TAG, "limpeza local iniciada...")
-            memoryQuestDao.clearPlayer()
-            memoryQuestDao.clearStatistics()
-            memoryQuestDao.clearAchievements()
-            memoryQuestDao.clearInventory()
-            memoryQuestDao.clearUnlockedThemes()
-            pendingSyncDao.deleteAll()
-            dataStoreManager.clearAllData()
-            avatarStorageManager.removeCustomAvatarFile()
-            Log.d(DELETE_LOG_TAG, "limpeza local concluída")
-
-            // Delete Firebase Auth anonymous user
-            Log.d(DELETE_LOG_TAG, "Iniciando exclusão do usuário do Firebase Auth...")
-            currentUser.delete().await()
-            Log.d(DELETE_LOG_TAG, "exclusão Auth concluída com sucesso.")
-
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Log.e(DELETE_LOG_TAG, "Erro ao excluir conta e dados (UID: $uid): ${e.message}", e)
             Result.failure(e)
         }
     }

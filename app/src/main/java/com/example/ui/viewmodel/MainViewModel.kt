@@ -1,10 +1,7 @@
 package com.example.ui.viewmodel
 
-import android.app.Activity
 import android.app.Application
 import android.util.Log
-import com.example.config.AdMobConfig
-import com.example.config.InterstitialManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.local.AppDatabase
@@ -47,67 +44,34 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 
 import com.example.config.LegalConfig
+import com.example.config.FirebaseBootstrap
 import com.example.data.model.UserConsentState
 import com.example.data.repository.ConsentRepository
+import com.example.data.repository.DeleteAccountRepository
+import com.example.data.repository.DeleteAccountResult
 import com.example.sync.ConsentSyncWorker
+import com.example.avatar.util.AvatarStorageManager
+import androidx.work.WorkManager
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val db = AppDatabase.getDatabase(application)
     private val dataStore = DataStoreManager(application)
     val repository = GameRepository(db.memoryQuestDao(), dataStore)
-    val leaderboardRepository = LeaderboardRepository()
-    val usernameRepository = UsernameRepository(db.memoryQuestDao(), leaderboardRepository)
-    val usernameSettingsRepository = UsernameSettingsRepository(dataStore)
-    val consentRepository = ConsentRepository(dataStore)
+    private val leaderboardRepository by lazy { LeaderboardRepository() }
+    private val usernameRepository by lazy { UsernameRepository(db.memoryQuestDao(), leaderboardRepository) }
+    private val usernameSettingsRepository = UsernameSettingsRepository(dataStore)
+    private val consentRepository by lazy { ConsentRepository(dataStore) }
     val audioManager = GameAudioManager.getInstance(application)
-    val interstitialManager = InterstitialManager(application)
 
-    init {
-        interstitialManager.loadAd()
-    }
-
-    private var lastInterstitialTime: Long = 0
-    private var levelsCompletedCount: Int = 0
-    private val minInterstitialIntervalMs = 120_000L // 2 minutos de intervalo mínimo ao voltar ao menu
-
-    fun showInterstitialAd(activity: Activity?, onAdDismissed: () -> Unit) {
-        if (isAdsRemoved.value || !AdMobConfig.ADS_ENABLED) {
-            onAdDismissed()
-            return
-        }
-        if (activity != null) {
-            interstitialManager.show(activity) {
-                lastInterstitialTime = System.currentTimeMillis()
-                onAdDismissed()
-            }
-        } else {
-            onAdDismissed()
-        }
-    }
-
-    fun showNextLevelInterstitial(activity: Activity?, onAdDismissed: () -> Unit) {
-        levelsCompletedCount++
-        if (levelsCompletedCount >= 2 && (System.currentTimeMillis() - lastInterstitialTime >= 60_000L)) {
-            showInterstitialAd(activity) {
-                levelsCompletedCount = 0
-                onAdDismissed()
-            }
-        } else {
-            onAdDismissed()
-        }
-    }
-
-    fun showBackToHomeInterstitial(activity: Activity?, onAdDismissed: () -> Unit) {
-        val now = System.currentTimeMillis()
-        if (now - lastInterstitialTime >= minInterstitialIntervalMs) {
-            showInterstitialAd(activity) {
-                levelsCompletedCount = 0
-                onAdDismissed()
-            }
-        } else {
-            onAdDismissed()
-        }
+    private val deleteAccountRepository by lazy {
+        DeleteAccountRepository(
+            memoryQuestDao = db.memoryQuestDao(),
+            pendingSyncDao = db.pendingSyncDao(),
+            dataStoreManager = dataStore,
+            avatarStorageManager = AvatarStorageManager(application),
+            gameRepository = repository
+        )
     }
 
     private val _usernameEligibility = MutableStateFlow<UsernameChangeEligibility>(UsernameChangeEligibility.Allowed)
@@ -215,6 +179,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             repository.ensureInitialized()
+            if (!FirebaseBootstrap.isReady) {
+                Log.w("MemoryQuestFirebase", "Firebase indisponível — pulando sync/auth na inicialização")
+                return@launch
+            }
             leaderboardRepository.ensureAuthenticated()
 
             val isOnline = ConnectivityObserver(context) {}.isNetworkAvailable()
@@ -268,6 +236,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun syncLeaderboard() {
+        if (!FirebaseBootstrap.isReady) return
         val context = getApplication<Application>()
         val online = ConnectivityObserver(context) {}.isNetworkAvailable()
         if (!online) {
@@ -288,6 +257,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun loadLeaderboard() {
+        if (!FirebaseBootstrap.isReady) return
         val context = getApplication<Application>()
         val online = ConnectivityObserver(context) {}.isNetworkAvailable()
         _isOnline.value = online
@@ -421,12 +391,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = "PT"
-    )
-
-    val darkMode: StateFlow<String> = repository.darkMode.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = "AUTO"
     )
 
     fun onUsernameInputChanged(newInput: String, isOnline: Boolean) {
@@ -588,10 +552,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { repository.setLanguage(lang) }
     }
 
-    fun setDarkMode(mode: String) {
-        viewModelScope.launch { repository.setDarkMode(mode) }
-    }
-
     fun resetSettings() {
         viewModelScope.launch { repository.resetDataStore() }
     }
@@ -606,101 +566,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private val _isResettingProgress = MutableStateFlow(false)
-    val isResettingProgress: StateFlow<Boolean> = _isResettingProgress.asStateFlow()
-
     fun resetGameProgress() {
         viewModelScope.launch { repository.resetGameProgress() }
     }
 
-    fun performGameReset(
-        context: android.content.Context,
-        onSuccess: () -> Unit,
-        onError: (String) -> Unit
-    ) {
+    fun deleteAccount(onResult: (DeleteAccountResult) -> Unit) {
         viewModelScope.launch {
-            _isResettingProgress.value = true
-            try {
-                // 1. Check network connectivity
-                val isOnline = ConnectivityObserver(context) {}.isNetworkAvailable()
-                if (!isOnline) {
-                    _isResettingProgress.value = false
-                    onError("Conecte-se à internet para redefinir seu progresso com segurança.")
-                    return@launch
-                }
-
-                // 2. Ensure FirebaseAuth currentUser
-                val uid = leaderboardRepository.ensureAuthenticated()
-                if (uid.isNullOrEmpty()) {
-                    _isResettingProgress.value = false
-                    onError("Conecte-se à internet para redefinir seu progresso com segurança.")
-                    return@launch
-                }
-
-                // 3. Reset remote progress in Firestore first
-                val remoteResult = leaderboardRepository.resetLeaderboardProgress()
-                if (remoteResult.isFailure) {
-                    _isResettingProgress.value = false
-                    Log.e("MemoryQuestReset", "Falha remota ao redefinir no Firestore: ${remoteResult.exceptionOrNull()?.message}")
-                    onError("Não foi possível redefinir o progresso no servidor. Tente novamente.")
-                    return@launch
-                }
-
-                // 4. Remote success! Now reset local data in Room and DataStore
-                repository.resetGameProgress()
-
-                // 5. Invalidate caches and reload
-                syncLeaderboard()
-
-                _isResettingProgress.value = false
-                onSuccess()
-            } catch (e: Exception) {
-                _isResettingProgress.value = false
-                Log.e("MemoryQuestReset", "Erro ao redefinir progresso: ${e.message}", e)
-                onError("Não foi possível redefinir o progresso no servidor. Tente novamente.")
+            val context = getApplication<Application>()
+            val isOnline = ConnectivityObserver(context) {}.isNetworkAvailable()
+            val result = deleteAccountRepository.deleteAccount(isOnline)
+            if (result is DeleteAccountResult.Success) {
+                clearStateAfterAccountDeletion()
             }
+            onResult(result)
         }
     }
 
-    private val _isDeletingAccount = MutableStateFlow(false)
-    val isDeletingAccount: StateFlow<Boolean> = _isDeletingAccount.asStateFlow()
-
-    fun performAccountDeletion(
-        context: android.content.Context,
-        onSuccess: () -> Unit,
-        onError: (String) -> Unit
-    ) {
-        viewModelScope.launch {
-            _isDeletingAccount.value = true
-            try {
-                val avatarStorageManager = com.example.avatar.util.AvatarStorageManager(getApplication())
-                val result = leaderboardRepository.deleteAccountAndAllData(
-                    context = context,
-                    dataStoreManager = dataStore,
-                    avatarStorageManager = avatarStorageManager,
-                    memoryQuestDao = db.memoryQuestDao(),
-                    pendingSyncDao = db.pendingSyncDao()
-                )
-
-                _isDeletingAccount.value = false
-
-                if (result.isSuccess) {
-                    onSuccess()
-                } else {
-                    val exception = result.exceptionOrNull()
-                    val userMsg = if (exception is IllegalStateException && exception.message?.contains("Conecte-se") == true) {
-                        exception.message ?: "Conecte-se à internet para excluir sua conta e seus dados com segurança."
-                    } else {
-                        "Não foi possível excluir todos os seus dados. Nenhuma alteração foi concluída. Tente novamente."
-                    }
-                    onError(userMsg)
-                }
-            } catch (e: Exception) {
-                _isDeletingAccount.value = false
-                Log.e("MemoryQuestDeleteAccount", "Erro inesperado ao excluir conta: ${e.message}", e)
-                onError("Não foi possível excluir todos os seus dados. Nenhuma alteração foi concluída. Tente novamente.")
-            }
-        }
+    private fun clearStateAfterAccountDeletion() {
+        WorkManager.getInstance(getApplication()).cancelAllWork()
+        _leaderboardList.value = emptyList()
+        _leaderboardError.value = null
+        _lastLeaderboardFetchTime.value = 0L
+        _usernameUiState.value = UsernameUiState()
+        _usernameEligibility.value = UsernameChangeEligibility.Allowed
     }
 
     override fun onCleared() {

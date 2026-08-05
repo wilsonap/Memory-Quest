@@ -23,6 +23,8 @@ import com.example.ui.viewmodel.GameViewModel
 import com.example.ui.viewmodel.MainViewModel
 
 import com.example.config.AdMobManager
+import com.example.config.FirebaseBootstrap
+import com.example.ui.screens.config.FirebaseConfigErrorScreen
 
 class MainActivity : AppCompatActivity() {
 
@@ -33,6 +35,19 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        if (!FirebaseBootstrap.isReady) {
+            setContent {
+                MemoryQuestTheme {
+                    FirebaseConfigErrorScreen()
+                }
+            }
+            return
+        }
+
+        // Garante criação dos ViewModels na thread principal antes do callback de rede
+        mainViewModel
+        gameViewModel
 
         // Initialize AdMob via centralized AdMobManager
         AdMobManager.initialize(this)
@@ -46,14 +61,13 @@ class MainActivity : AppCompatActivity() {
         connectivityObserver.startListening()
 
         setContent {
-            val darkMode by mainViewModel.darkMode.collectAsStateWithLifecycle()
             val language by mainViewModel.language.collectAsStateWithLifecycle()
 
             LaunchedEffect(language) {
                 applyAppLanguage(language)
             }
 
-            MemoryQuestTheme(darkMode = darkMode) {
+            MemoryQuestTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     MemoryQuestNavGraph(
                         mainViewModel = mainViewModel,

@@ -1,5 +1,6 @@
 package com.example.ui.screens.settings
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -22,9 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Help
 import androidx.compose.material.icons.filled.Info
@@ -38,12 +37,15 @@ import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
@@ -54,17 +56,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.launch
 import androidx.compose.ui.res.stringResource
@@ -79,6 +77,7 @@ import com.example.ui.components.TopGameBar
 
 import com.example.config.LegalConfig
 import com.example.data.model.UserConsentState
+import com.example.data.repository.DeleteAccountResult
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -92,167 +91,63 @@ fun SettingsScreen(
     musicVolume: Float = 0.5f,
     sfxVolume: Float = 0.8f,
     language: String,
-    darkMode: String,
     onSetSound: (Boolean) -> Unit,
     onSetMusic: (Boolean) -> Unit,
     onSetVibration: (Boolean) -> Unit,
     onSetMusicVolume: (Float) -> Unit = {},
     onSetSfxVolume: (Float) -> Unit = {},
     onSetLanguage: (String) -> Unit,
-    onSetDarkMode: (String) -> Unit,
     onResetDefaults: () -> Unit,
     onResetGameProgress: () -> Unit = {},
-    isResettingProgress: Boolean = false,
-    onPerformGameReset: (onSuccess: () -> Unit, onError: (String) -> Unit) -> Unit = { _, _ -> },
-    isDeletingAccount: Boolean = false,
-    onPerformAccountDeletion: (onSuccess: () -> Unit, onError: (String) -> Unit) -> Unit = { _, _ -> },
-    onAccountDeleted: () -> Unit = {},
+    onDeleteAccount: (onResult: (DeleteAccountResult) -> Unit) -> Unit = {},
+    onDeleteAccountSuccess: () -> Unit = {},
     onBackClick: () -> Unit,
     isAdsRemoved: Boolean = false,
     consentState: UserConsentState? = null,
     modifier: Modifier = Modifier
 ) {
-    var showResetFirstConfirmDialog by remember { mutableStateOf(false) }
-    var showResetSecondConfirmDialog by remember { mutableStateOf(false) }
-
-    var showDeleteAccountStep1Dialog by remember { mutableStateOf(false) }
-    var showDeleteAccountStep2Dialog by remember { mutableStateOf(false) }
-    var confirmDeleteAccountInput by remember { mutableStateOf("") }
-    var showAccountDeletedSuccessDialog by remember { mutableStateOf(false) }
+    var showResetConfirmDialog by remember { mutableStateOf(false) }
+    var showDeleteAccountDialog by remember { mutableStateOf(false) }
+    var showDeleteAccountFinalDialog by remember { mutableStateOf(false) }
+    var deleteConfirmationText by remember { mutableStateOf("") }
+    var isDeletingAccount by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val deleteConfirmationKeyword = stringResource(R.string.delete_account_confirmation_keyword)
 
-    // Diálogo 1: Confirmação Inicial
-    if (showResetFirstConfirmDialog) {
-        AlertDialog(
-            onDismissRequest = { showResetFirstConfirmDialog = false },
-            title = {
-                Text(
-                    text = "Redefinir Progresso do Jogo",
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                )
-            },
-            text = {
-                Text(
-                    text = "Todo o seu progresso, pontuação, moedas, vidas, conquistas e itens adquiridos serão redefinidos. Seu nome, avatar e configurações serão mantidos.",
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showResetFirstConfirmDialog = false
-                        showResetSecondConfirmDialog = true
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Redefinir progresso", color = MaterialTheme.colorScheme.onError, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                OutlinedButton(
-                    onClick = { showResetFirstConfirmDialog = false }
-                ) {
-                    Text("Cancelar")
-                }
-            },
-            shape = RoundedCornerShape(16.dp),
-            containerColor = MaterialTheme.colorScheme.surface,
-            tonalElevation = 6.dp
-        )
-    }
-
-    // Diálogo 2: Segunda Confirmação Explicita
-    if (showResetSecondConfirmDialog) {
-        AlertDialog(
-            onDismissRequest = { showResetSecondConfirmDialog = false },
-            title = {
-                Text(
-                    text = "Tem certeza absoluta?",
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                )
-            },
-            text = {
-                Text(
-                    text = "Esta ação não pode ser desfeita. Todo o seu progresso no servidor e neste aparelho será apagado permanentemente.",
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showResetSecondConfirmDialog = false
-                        onPerformGameReset(
-                            {
-                                Toast.makeText(context, "Progresso redefinido com sucesso!", Toast.LENGTH_SHORT).show()
-                            },
-                            { errorMsg ->
-                                Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
-                            }
+    fun startDeleteAccount() {
+        if (isDeletingAccount) return
+        isDeletingAccount = true
+        onDeleteAccount { result ->
+            isDeletingAccount = false
+            when (result) {
+                DeleteAccountResult.Success -> {
+                    scope.launch {
+                        snackbarHostState.showSnackbar(
+                            context.getString(R.string.delete_account_success)
                         )
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Sim, redefinir tudo", color = MaterialTheme.colorScheme.onError, fontWeight = FontWeight.Bold)
+                        onDeleteAccountSuccess()
+                    }
                 }
-            },
-            dismissButton = {
-                OutlinedButton(
-                    onClick = { showResetSecondConfirmDialog = false }
-                ) {
-                    Text("Cancelar")
-                }
-            },
-            shape = RoundedCornerShape(16.dp),
-            containerColor = MaterialTheme.colorScheme.surface,
-            tonalElevation = 6.dp
-        )
-    }
-
-    // Indicador de Progresso Bloqueante durante Operação
-    if (isResettingProgress) {
-        Dialog(
-            onDismissRequest = { /* Não permite fechar durante operação */ },
-            properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
-        ) {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Column(
-                    modifier = Modifier.padding(24.dp),
-                    horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "Redefinindo progresso no servidor...",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold
-                    )
+                else -> {
+                    scope.launch {
+                        snackbarHostState.showSnackbar(
+                            deleteAccountResultMessage(context, result)
+                        )
+                    }
                 }
             }
         }
     }
 
-    // Diálogo Exclusão de Conta Step 1
-    if (showDeleteAccountStep1Dialog) {
+    if (showResetConfirmDialog) {
         AlertDialog(
-            onDismissRequest = { showDeleteAccountStep1Dialog = false },
+            onDismissRequest = { showResetConfirmDialog = false },
             title = {
                 Text(
-                    text = "Excluir conta e todos os dados",
+                    text = "Reiniciar Jogo?",
                     style = MaterialTheme.typography.titleLarge.copy(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.error
@@ -261,7 +156,7 @@ fun SettingsScreen(
             },
             text = {
                 Text(
-                    text = "Esta ação é permanente.\n\nSerão excluídos:\n• progresso;\n• pontuação e ranking;\n• username;\n• estatísticas;\n• consentimentos;\n• controle de alteração de nome;\n• dados locais;\n• conta anônima do Firebase.\n\nEssa ação não poderá ser desfeita.",
+                    text = "Deseja realmente reiniciar o jogo do início? Sua fase atual (retornará à Fase 1), moedas e estatísticas serão reiniciadas.",
                     style = MaterialTheme.typography.bodyMedium.copy(
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -270,18 +165,18 @@ fun SettingsScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        showDeleteAccountStep1Dialog = false
-                        confirmDeleteAccountInput = ""
-                        showDeleteAccountStep2Dialog = true
+                        showResetConfirmDialog = false
+                        onResetGameProgress()
+                        Toast.makeText(context, "Jogo reiniciado do início!", Toast.LENGTH_SHORT).show()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text("Continuar", color = MaterialTheme.colorScheme.onError, fontWeight = FontWeight.Bold)
+                    Text("Sim, Reiniciar", color = MaterialTheme.colorScheme.onError, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 OutlinedButton(
-                    onClick = { showDeleteAccountStep1Dialog = false }
+                    onClick = { showResetConfirmDialog = false }
                 ) {
                     Text("Cancelar")
                 }
@@ -292,13 +187,72 @@ fun SettingsScreen(
         )
     }
 
-    // Diálogo Exclusão de Conta Step 2
-    if (showDeleteAccountStep2Dialog) {
+    if (showDeleteAccountDialog) {
         AlertDialog(
-            onDismissRequest = { showDeleteAccountStep2Dialog = false },
+            onDismissRequest = {
+                if (!isDeletingAccount) showDeleteAccountDialog = false
+            },
             title = {
                 Text(
-                    text = "Confirmação Final",
+                    text = stringResource(R.string.delete_account_title),
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                )
+            },
+            text = {
+                Text(
+                    text = stringResource(R.string.delete_account_message),
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteAccountDialog = false
+                        deleteConfirmationText = ""
+                        showDeleteAccountFinalDialog = true
+                    },
+                    enabled = !isDeletingAccount,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text(
+                        text = stringResource(R.string.delete_account_confirm),
+                        color = MaterialTheme.colorScheme.onError,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { if (!isDeletingAccount) showDeleteAccountDialog = false },
+                    enabled = !isDeletingAccount
+                ) {
+                    Text(stringResource(R.string.delete_account_cancel))
+                }
+            },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        )
+    }
+
+    if (showDeleteAccountFinalDialog) {
+        val isConfirmationValid = deleteConfirmationText == deleteConfirmationKeyword
+
+        AlertDialog(
+            onDismissRequest = {
+                if (!isDeletingAccount) {
+                    showDeleteAccountFinalDialog = false
+                    deleteConfirmationText = ""
+                }
+            },
+            title = {
+                Text(
+                    text = stringResource(R.string.delete_account_final_title),
                     style = MaterialTheme.typography.titleLarge.copy(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.error
@@ -308,86 +262,51 @@ fun SettingsScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        text = "Esta ação é permanente e não poderá ser desfeita. Para confirmar a exclusão de todos os seus dados e da sua conta, digite EXCLUIR no campo abaixo.",
+                        text = stringResource(R.string.delete_account_final_message),
                         style = MaterialTheme.typography.bodyMedium.copy(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     )
-
                     OutlinedTextField(
-                        value = confirmDeleteAccountInput,
-                        onValueChange = { confirmDeleteAccountInput = it },
-                        label = { Text("Digite EXCLUIR") },
-                        placeholder = { Text("EXCLUIR") },
+                        value = deleteConfirmationText,
+                        onValueChange = { deleteConfirmationText = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isDeletingAccount,
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        label = { Text(stringResource(R.string.delete_account_confirmation_hint)) },
+                        shape = RoundedCornerShape(12.dp)
                     )
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        showDeleteAccountStep2Dialog = false
-                        onPerformAccountDeletion(
-                            {
-                                showAccountDeletedSuccessDialog = true
-                            },
-                            { errorMsg ->
-                                Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
-                            }
-                        )
+                        if (!isConfirmationValid || isDeletingAccount) return@Button
+                        showDeleteAccountFinalDialog = false
+                        deleteConfirmationText = ""
+                        startDeleteAccount()
                     },
-                    enabled = confirmDeleteAccountInput.trim() == "EXCLUIR",
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        disabledContainerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.3f)
-                    )
+                    enabled = isConfirmationValid && !isDeletingAccount,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text("Excluir permanentemente", color = MaterialTheme.colorScheme.onError, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = stringResource(R.string.delete_account_final_confirm),
+                        color = MaterialTheme.colorScheme.onError,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             },
             dismissButton = {
                 OutlinedButton(
-                    onClick = { showDeleteAccountStep2Dialog = false }
-                ) {
-                    Text("Cancelar")
-                }
-            },
-            shape = RoundedCornerShape(16.dp),
-            containerColor = MaterialTheme.colorScheme.surface,
-            tonalElevation = 6.dp
-        )
-    }
-
-    // Diálogo Sucesso Exclusão
-    if (showAccountDeletedSuccessDialog) {
-        AlertDialog(
-            onDismissRequest = { },
-            title = {
-                Text(
-                    text = "Conta Excluída",
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                )
-            },
-            text = {
-                Text(
-                    text = "Sua conta e seus dados foram excluídos permanentemente.",
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                )
-            },
-            confirmButton = {
-                Button(
                     onClick = {
-                        showAccountDeletedSuccessDialog = false
-                        onAccountDeleted()
-                    }
+                        if (!isDeletingAccount) {
+                            showDeleteAccountFinalDialog = false
+                            deleteConfirmationText = ""
+                        }
+                    },
+                    enabled = !isDeletingAccount
                 ) {
-                    Text("Fechar", fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.delete_account_cancel))
                 }
             },
             shape = RoundedCornerShape(16.dp),
@@ -396,39 +315,14 @@ fun SettingsScreen(
         )
     }
 
-    // Indicador de Progresso Bloqueante durante Exclusão de Conta
-    if (isDeletingAccount) {
-        Dialog(
-            onDismissRequest = { },
-            properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
-        ) {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Column(
-                    modifier = Modifier.padding(24.dp),
-                    horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.error)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "Excluindo conta e todos os dados...",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        }
-    }
-
+    Box(modifier = modifier.fillMaxSize()) {
     Scaffold(
         containerColor = Color.Transparent,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             BannerAdContainer(isAdsRemoved = isAdsRemoved)
         },
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
@@ -561,7 +455,6 @@ fun SettingsScreen(
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
 
                         // Botão Testar Efeitos Sonoros
-                        val scope = androidx.compose.runtime.rememberCoroutineScope()
                         OutlinedButton(
                             onClick = {
                                 scope.launch {
@@ -642,58 +535,6 @@ fun SettingsScreen(
                                 ) { Text("English") }
                             }
                         }
-
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
-
-                        // Tema Toggle (Claro / Escuro / Sistema)
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(imageVector = Icons.Default.DarkMode, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(stringResource(R.string.settings_theme), color = MaterialTheme.colorScheme.onSurface)
-                            }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                val isLight = darkMode.equals("LIGHT", ignoreCase = true)
-                                val isDark = darkMode.equals("DARK", ignoreCase = true)
-                                val isSystem = !isLight && !isDark
-
-                                OutlinedButton(
-                                    onClick = { onSetDarkMode("LIGHT") },
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.weight(1f),
-                                    colors = ButtonDefaults.outlinedButtonColors(
-                                        containerColor = if (isLight) MaterialTheme.colorScheme.primary else Color.Transparent,
-                                        contentColor = if (isLight) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                                    )
-                                ) { Text(stringResource(R.string.settings_theme_light), fontSize = 12.sp) }
-
-                                OutlinedButton(
-                                    onClick = { onSetDarkMode("DARK") },
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.weight(1f),
-                                    colors = ButtonDefaults.outlinedButtonColors(
-                                        containerColor = if (isDark) MaterialTheme.colorScheme.primary else Color.Transparent,
-                                        contentColor = if (isDark) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                                    )
-                                ) { Text(stringResource(R.string.settings_theme_dark), fontSize = 12.sp) }
-
-                                OutlinedButton(
-                                    onClick = { onSetDarkMode("AUTO") },
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.weight(1f),
-                                    colors = ButtonDefaults.outlinedButtonColors(
-                                        containerColor = if (isSystem) MaterialTheme.colorScheme.primary else Color.Transparent,
-                                        contentColor = if (isSystem) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                                    )
-                                ) { Text(stringResource(R.string.settings_theme_system), fontSize = 12.sp) }
-                            }
-                        }
                     }
                 }
 
@@ -762,23 +603,21 @@ fun SettingsScreen(
 
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
 
-                        // Exclusão de dados / Reiniciar jogo
+                        // Exclusão de conta (dados remotos + locais + auth)
                         NavigationLinkRow(
                             icon = Icons.Default.Delete,
-                            title = "Exclusão e Reinício de Dados",
-                            onClick = { showResetFirstConfirmDialog = true }
+                            title = stringResource(R.string.delete_account_menu_title),
+                            enabled = !isDeletingAccount,
+                            onClick = { showDeleteAccountDialog = true }
                         )
 
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
 
-                        // Excluir conta e todos os dados
+                        // Reinício local de progresso
                         NavigationLinkRow(
-                            icon = Icons.Default.DeleteForever,
-                            title = "Excluir conta e todos os dados",
-                            description = "Remove permanentemente sua conta, ranking e progresso.",
-                            titleColor = MaterialTheme.colorScheme.error,
-                            iconTint = MaterialTheme.colorScheme.error,
-                            onClick = { showDeleteAccountStep1Dialog = true }
+                            icon = Icons.Default.RestartAlt,
+                            title = stringResource(R.string.reset_game_menu_title),
+                            onClick = { showResetConfirmDialog = true }
                         )
 
                         HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
@@ -906,51 +745,85 @@ fun SettingsScreen(
             }
         }
     }
+
+        if (isDeletingAccount) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(Color.Black.copy(alpha = 0.45f))
+                    .clickable(enabled = false) {},
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 6.dp
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 32.dp, vertical = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.error)
+                        Text(
+                            text = stringResource(R.string.delete_account_in_progress),
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun deleteAccountResultMessage(context: Context, result: DeleteAccountResult): String {
+    return when (result) {
+        DeleteAccountResult.Success -> context.getString(R.string.delete_account_success)
+        DeleteAccountResult.NoInternet -> context.getString(R.string.delete_account_error_no_internet)
+        DeleteAccountResult.InvalidSession -> context.getString(R.string.delete_account_error_invalid_session)
+        DeleteAccountResult.PermissionDenied -> context.getString(R.string.delete_account_error_permission)
+        DeleteAccountResult.RequiresRecentLogin -> context.getString(R.string.delete_account_error_recent_login)
+        is DeleteAccountResult.AuthDeleteFailure -> result.cause.message?.takeIf { it.isNotBlank() }
+            ?: context.getString(R.string.delete_account_error_auth)
+        is DeleteAccountResult.RemoteFailure -> result.cause.message?.takeIf { it.isNotBlank() }
+            ?: context.getString(R.string.delete_account_error_generic)
+    }
 }
 
 @Composable
 private fun NavigationLinkRow(
     icon: ImageVector,
     title: String,
-    description: String? = null,
-    titleColor: Color = MaterialTheme.colorScheme.onSurface,
-    iconTint: Color = MaterialTheme.colorScheme.primary,
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .clickable(enabled = enabled) { onClick() }
             .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.weight(1f),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(imageVector = icon, contentDescription = title, tint = iconTint)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                tint = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+            )
             Spacer(modifier = Modifier.width(10.dp))
-            Column {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        color = titleColor,
-                        fontWeight = if (titleColor == MaterialTheme.colorScheme.error) FontWeight.Bold else FontWeight.Normal
-                    )
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    color = if (enabled) MaterialTheme.colorScheme.onSurface
+                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                 )
-                if (!description.isNullOrEmpty()) {
-                    Text(
-                        text = description,
-                        style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    )
-                }
-            }
+            )
         }
         Icon(
             imageVector = Icons.Default.ChevronRight,
             contentDescription = null,
-            tint = iconTint.copy(alpha = 0.5f)
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
         )
     }
 }

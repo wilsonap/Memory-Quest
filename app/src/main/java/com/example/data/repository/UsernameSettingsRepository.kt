@@ -1,6 +1,7 @@
 package com.example.data.repository
 
 import android.util.Log
+import com.example.config.FirebaseBootstrap
 import com.example.data.local.DataStoreManager
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FieldValue
@@ -33,8 +34,12 @@ sealed class UsernameChangeEligibility {
 
 class UsernameSettingsRepository(
     private val dataStoreManager: DataStoreManager,
-    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
+    firestoreProvider: () -> FirebaseFirestore = { FirebaseFirestore.getInstance() }
 ) {
+    private val firestore: FirebaseFirestore by lazy {
+        FirebaseBootstrap.requireReady()
+        firestoreProvider()
+    }
     companion object {
         private const val TAG = "UsernameValidation"
         const val COOLDOWN_DURATION_MS = 7 * 24 * 60 * 60 * 1000L // 7 days in milliseconds
