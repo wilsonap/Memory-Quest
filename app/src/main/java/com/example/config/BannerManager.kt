@@ -9,7 +9,7 @@ import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
 import com.google.android.gms.ads.LoadAdError
 
-private const val TAG = "BannerManager"
+private const val TAG = "MemoryQuestAds"
 
 class BannerManager(
     private val context: Context,
@@ -25,44 +25,33 @@ class BannerManager(
             adListener = object : AdListener() {
                 override fun onAdLoaded() {
                     onAdLoadedStateChange(true)
-                    if (BuildConfig.DEBUG) {
-                        Log.d(TAG, "[DEBUG LOG] onAdLoaded - Banner ($adUnitId) carregado com sucesso.")
-                    }
+                    Log.d(TAG, "onAdLoaded - Banner $adUnitId carregado com sucesso.")
                 }
 
                 override fun onAdFailedToLoad(loadAdError: LoadAdError) {
                     onAdLoadedStateChange(false)
-                    if (BuildConfig.DEBUG) {
-                        Log.w(
-                            TAG,
-                            "[DEBUG LOG] onAdFailedToLoad - Code: ${loadAdError.code}, " +
-                            "Domain: ${loadAdError.domain}, Message: ${loadAdError.message}"
-                        )
-                    }
+                    Log.w(
+                        TAG,
+                        "onAdFailedToLoad - Code: ${loadAdError.code}, " +
+                        "Domain: ${loadAdError.domain}, Message: ${loadAdError.message}, " +
+                        "ResponseInfo: ${loadAdError.responseInfo}"
+                    )
                 }
 
                 override fun onAdOpened() {
-                    if (BuildConfig.DEBUG) {
-                        Log.d(TAG, "[DEBUG LOG] onAdOpened - Banner expandido/aberto.")
-                    }
+                    Log.d(TAG, "onAdOpened - Banner expandido/aberto.")
                 }
 
                 override fun onAdClosed() {
-                    if (BuildConfig.DEBUG) {
-                        Log.d(TAG, "[DEBUG LOG] onAdClosed - Banner fechado.")
-                    }
+                    Log.d(TAG, "onAdClosed - Banner fechado.")
                 }
 
                 override fun onAdImpression() {
-                    if (BuildConfig.DEBUG) {
-                        Log.d(TAG, "[DEBUG LOG] onAdImpression - Impressão do banner registrada.")
-                    }
+                    Log.d(TAG, "onAdImpression - Impressão do banner registrada.")
                 }
 
                 override fun onAdClicked() {
-                    if (BuildConfig.DEBUG) {
-                        Log.d(TAG, "[DEBUG LOG] onAdClicked - Banner clicado pelo usuário.")
-                    }
+                    Log.d(TAG, "onAdClicked - Banner clicado pelo usuário.")
                 }
             }
         }
@@ -72,16 +61,17 @@ class BannerManager(
     }
 
     fun loadAd() {
+        if (!AdMobManager.canRequestAds()) {
+            Log.d(TAG, "canRequestAds e falso, ignorando solitação de banner.")
+            return
+        }
+
         android.os.Handler(android.os.Looper.getMainLooper()).post {
             try {
-                if (BuildConfig.DEBUG) {
-                    Log.d(TAG, "[DEBUG LOG] Carregando AdRequest para $adUnitId...")
-                }
+                Log.d(TAG, "Banner solicitado: adUnitId=$adUnitId")
                 adView?.loadAd(AdRequest.Builder().build())
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) {
-                    Log.e(TAG, "[DEBUG LOG] Exceção ao carregar AdMob banner: ${e.message}", e)
-                }
+                Log.e(TAG, "Exceção ao carregar banner AdMob: ${e.message}", e)
             }
         }
     }
@@ -90,13 +80,10 @@ class BannerManager(
         try {
             adView?.destroy()
             adView = null
-            if (BuildConfig.DEBUG) {
-                Log.d(TAG, "[DEBUG LOG] Banner AdView destruído.")
-            }
+            Log.d(TAG, "Banner AdView destruído.")
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) {
-                Log.w(TAG, "[DEBUG LOG] Erro ao destruir banner: ${e.message}")
-            }
+            Log.w(TAG, "Erro ao destruir banner: ${e.message}")
         }
     }
 }
+

@@ -10,7 +10,7 @@ import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.rewarded.RewardedAd
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
 
-private const val TAG = "RewardedManager"
+private const val TAG = "MemoryQuestAds"
 
 class RewardedManager(
     private val context: Context,
@@ -20,13 +20,16 @@ class RewardedManager(
     private var isLoading = false
 
     fun loadAd(onAdLoaded: (() -> Unit)? = null, onAdFailed: (() -> Unit)? = null) {
+        if (!AdMobManager.canRequestAds()) {
+            Log.d(TAG, "canRequestAds e falso, ignorando solitação de Rewarded.")
+            onAdFailed?.invoke()
+            return
+        }
         if (isLoading || rewardedAd != null) return
         isLoading = true
 
         android.os.Handler(android.os.Looper.getMainLooper()).post {
-            if (BuildConfig.DEBUG) {
-                Log.d(TAG, "[DEBUG LOG] Solicitando Rewarded ($adUnitId)...")
-            }
+            Log.d(TAG, "Rewarded ad solicitado: adUnitId=$adUnitId")
 
             RewardedAd.load(
                 context,
@@ -36,21 +39,19 @@ class RewardedManager(
                     override fun onAdLoaded(ad: RewardedAd) {
                         rewardedAd = ad
                         isLoading = false
-                        if (BuildConfig.DEBUG) {
-                            Log.d(TAG, "[DEBUG LOG] Rewarded ad carregado com sucesso.")
-                        }
+                        Log.d(TAG, "onAdLoaded - Rewarded $adUnitId carregado com sucesso.")
                         onAdLoaded?.invoke()
                     }
 
                     override fun onAdFailedToLoad(loadAdError: LoadAdError) {
                         rewardedAd = null
                         isLoading = false
-                        if (BuildConfig.DEBUG) {
-                            Log.w(
-                                TAG,
-                                "[DEBUG LOG] Falha ao carregar Rewarded - Code: ${loadAdError.code}, Message: ${loadAdError.message}"
-                            )
-                        }
+                        Log.w(
+                            TAG,
+                            "onAdFailedToLoad - Code: ${loadAdError.code}, " +
+                            "Domain: ${loadAdError.domain}, Message: ${loadAdError.message}, " +
+                            "ResponseInfo: ${loadAdError.responseInfo}"
+                        )
                         onAdFailed?.invoke()
                     }
                 }

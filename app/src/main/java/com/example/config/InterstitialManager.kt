@@ -10,7 +10,7 @@ import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.interstitial.InterstitialAd
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 
-private const val TAG = "InterstitialManager"
+private const val TAG = "MemoryQuestAds"
 
 class InterstitialManager(
     private val context: Context,
@@ -20,13 +20,16 @@ class InterstitialManager(
     private var isLoading = false
 
     fun loadAd(onAdLoaded: (() -> Unit)? = null, onAdFailed: (() -> Unit)? = null) {
+        if (!AdMobManager.canRequestAds()) {
+            Log.d(TAG, "canRequestAds e falso, ignorando solitação de Interstitial.")
+            onAdFailed?.invoke()
+            return
+        }
         if (isLoading || interstitialAd != null) return
         isLoading = true
 
         android.os.Handler(android.os.Looper.getMainLooper()).post {
-            if (BuildConfig.DEBUG) {
-                Log.d(TAG, "[DEBUG LOG] Solicitando Interstitial ($adUnitId)...")
-            }
+            Log.d(TAG, "Interstitial solicitado: adUnitId=$adUnitId")
 
             InterstitialAd.load(
                 context,
@@ -36,21 +39,19 @@ class InterstitialManager(
                     override fun onAdLoaded(ad: InterstitialAd) {
                         interstitialAd = ad
                         isLoading = false
-                        if (BuildConfig.DEBUG) {
-                            Log.d(TAG, "[DEBUG LOG] Interstitial carregado com sucesso.")
-                        }
+                        Log.d(TAG, "onAdLoaded - Interstitial $adUnitId carregado com sucesso.")
                         onAdLoaded?.invoke()
                     }
 
                     override fun onAdFailedToLoad(loadAdError: LoadAdError) {
                         interstitialAd = null
                         isLoading = false
-                        if (BuildConfig.DEBUG) {
-                            Log.w(
-                                TAG,
-                                "[DEBUG LOG] Falha ao carregar Interstitial - Code: ${loadAdError.code}, Message: ${loadAdError.message}"
-                            )
-                        }
+                        Log.w(
+                            TAG,
+                            "onAdFailedToLoad - Code: ${loadAdError.code}, " +
+                            "Domain: ${loadAdError.domain}, Message: ${loadAdError.message}, " +
+                            "ResponseInfo: ${loadAdError.responseInfo}"
+                        )
                         onAdFailed?.invoke()
                     }
                 }

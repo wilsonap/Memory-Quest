@@ -49,8 +49,8 @@ class MainActivity : AppCompatActivity() {
         mainViewModel
         gameViewModel
 
-        // Initialize AdMob via centralized AdMobManager
-        AdMobManager.initialize(this)
+        // Initialize AdMob & check Google UMP consent
+        AdMobManager.requestConsentAndInitialize(this)
 
         // Initialize offline sync connectivity observer
         connectivityObserver = ConnectivityObserver(applicationContext) {

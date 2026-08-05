@@ -33,7 +33,7 @@ import com.example.config.BannerManager
 import com.example.sync.ConnectivityObserver
 import com.google.android.gms.ads.AdSize
 
-private const val TAG = "BannerAdView"
+private const val TAG = "MemoryQuestAds"
 
 /**
  * Componente reutilizável e padronizado para exibição de banners de anúncio em todo o aplicativo.
@@ -52,18 +52,20 @@ fun BannerAdContainer(
 
     val context = LocalContext.current
     var isAdLoaded by remember { mutableStateOf(false) }
+    var adFailedToLoad by remember { mutableStateOf(false) }
     var bannerManagerRef by remember { mutableStateOf<BannerManager?>(null) }
 
     val adaptiveAdSize = remember(context) { getAdaptiveAdSize(context) }
-    val bannerHeightDp = remember(adaptiveAdSize) { adaptiveAdSize.getHeight().coerceAtLeast(50) }
+    val bannerHeightDp = remember(adaptiveAdSize, adFailedToLoad) {
+        if (adFailedToLoad) 0 else adaptiveAdSize.getHeight().coerceAtLeast(50)
+    }
 
-    // Re-tentar carregar ao reconectar à internet
+    // Re-tentar carregar ao reconectar à internet se falhou previamente
     DisposableEffect(context) {
         val observer = ConnectivityObserver(context) {
             if (!isAdLoaded) {
-                if (BuildConfig.DEBUG) {
-                    Log.d(TAG, "[DEBUG LOG] Conexão restabelecida. Recarregando banner AdMob...")
-                }
+                Log.d(TAG, "Conexão restabelecida. Tentando recarregar banner AdMob...")
+                adFailedToLoad = false
                 bannerManagerRef?.loadAd()
             }
         }
@@ -72,6 +74,10 @@ fun BannerAdContainer(
         onDispose {
             observer.stopListening()
         }
+    }
+
+    if (adFailedToLoad) {
+        return
     }
 
     Surface(
@@ -95,6 +101,7 @@ fun BannerAdContainer(
                         adUnitId = adUnitId,
                         onAdLoadedStateChange = { loaded ->
                             isAdLoaded = loaded
+                            adFailedToLoad = !loaded
                         }
                     )
                     bannerManagerRef = manager

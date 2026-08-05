@@ -69,6 +69,7 @@ dependencies {
   implementation(libs.firebase.firestore)
   implementation(libs.kotlinx.coroutines.play.services)
   implementation(libs.play.services.ads)
+  implementation(libs.user.messaging.platform)
   implementation(libs.androidx.media3.exoplayer)
 
   implementation(libs.androidx.activity.compose)

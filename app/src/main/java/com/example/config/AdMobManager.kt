@@ -1,53 +1,112 @@
 package com.example.config
 
+import android.app.Activity
 import android.content.Context
 import android.util.Log
 import com.example.BuildConfig
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.MobileAds
 import com.google.android.gms.ads.RequestConfiguration
+import com.google.android.ump.ConsentInformation
+import com.google.android.ump.ConsentRequestParameters
+import com.google.android.ump.UserMessagingPlatform
 import java.util.concurrent.atomic.AtomicBoolean
 
-private const val TAG = "AdMobManager"
+private const val TAG = "MemoryQuestAds"
 
 object AdMobManager {
     private val isInitialized = AtomicBoolean(false)
+    private var canRequestAdsState = true
 
+    /**
+     * Configura o Mobile Ads SDK com tratamento não personalizado e inicializa.
+     */
     fun initialize(context: Context) {
         if (isInitialized.getAndSet(true)) {
             return
         }
 
         try {
+            // Configurar tratamento não personalizado de anúncios antes da inicialização/solicitações
+            val builder = MobileAds.getRequestConfiguration().toBuilder()
+                .setPublisherPrivacyPersonalizationState(
+                    RequestConfiguration.PublisherPrivacyPersonalizationState.DISABLED
+                )
+
             if (BuildConfig.DEBUG) {
-                val requestConfiguration = RequestConfiguration.Builder()
-                    .setTestDeviceIds(
-                        listOf(
-                            AdRequest.DEVICE_ID_EMULATOR
-                        )
-                    )
-                    .build()
-                MobileAds.setRequestConfiguration(requestConfiguration)
-                Log.d(TAG, "[DEBUG LOG] AdMob inicializado em MODO DEBUG.")
-                Log.d(TAG, "[DEBUG LOG] App ID: ${AdMobConfig.appId}")
-                Log.d(TAG, "[DEBUG LOG] Banner ID: ${AdMobConfig.bannerId}")
+                builder.setTestDeviceIds(listOf(AdRequest.DEVICE_ID_EMULATOR))
             }
 
+            MobileAds.setRequestConfiguration(builder.build())
+
             MobileAds.initialize(context) { initializationStatus ->
+                Log.d(TAG, "Mobile Ads inicializado com sucesso.")
                 if (BuildConfig.DEBUG) {
                     val statusMap = initializationStatus.adapterStatusMap
                     for ((adapterClass, status) in statusMap) {
                         Log.d(
                             TAG,
-                            "[DEBUG LOG] Adapter: $adapterClass, State: ${status.initializationState}, Latency: ${status.latency}"
+                            "Adapter: $adapterClass, State: ${status.initializationState}, Latency: ${status.latency}"
                         )
                     }
                 }
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) {
-                Log.e(TAG, "[DEBUG LOG] Erro ao inicializar AdMob: ${e.message}", e)
-            }
+            Log.e(TAG, "Erro ao inicializar Mobile Ads: ${e.message}", e)
         }
     }
+
+    /**
+     * Consulta o consentimento via Google User Messaging Platform (UMP) e inicializa os anúncios quando permitido.
+     */
+    fun requestConsentAndInitialize(activity: Activity, onComplete: ((Boolean) -> Unit)? = null) {
+        initialize(activity.applicationContext)
+
+        try {
+            Log.d(TAG, "Consentimento consultado via Google UMP SDK...")
+            val consentInformation = UserMessagingPlatform.getConsentInformation(activity)
+            val params = ConsentRequestParameters.Builder()
+                .setTagForUnderAgeOfConsent(false)
+                .build()
+
+            consentInformation.requestConsentInfoUpdate(
+                activity,
+                params,
+                {
+                    Log.d(TAG, "Informações de consentimento UMP atualizadas.")
+                    UserMessagingPlatform.loadAndShowConsentFormIfRequired(activity) { formError ->
+                        if (formError != null) {
+                            Log.w(
+                                TAG,
+                                "Erro no formulário de consentimento UMP - Code: ${formError.errorCode}, Message: ${formError.message}"
+                            )
+                        }
+                        val canRequest = consentInformation.canRequestAds()
+                        canRequestAdsState = canRequest
+                        Log.d(TAG, "canRequestAds: $canRequest")
+                        onComplete?.invoke(canRequest)
+                    }
+                },
+                { requestConsentError ->
+                    Log.w(
+                        TAG,
+                        "Falha ao atualizar informações de consentimento UMP - Code: ${requestConsentError.errorCode}, Message: ${requestConsentError.message}"
+                    )
+                    val canRequest = consentInformation.canRequestAds()
+                    canRequestAdsState = canRequest
+                    Log.d(TAG, "canRequestAds: $canRequest")
+                    onComplete?.invoke(canRequest)
+                }
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Exceção ao solicitar consentimento UMP: ${e.message}", e)
+            onComplete?.invoke(canRequestAdsState)
+        }
+    }
+
+    /**
+     * Indica se o aplicativo tem permissão para solicitar anúncios segundo o consentimento UMP.
+     */
+    fun canRequestAds(): Boolean = canRequestAdsState
 }
+

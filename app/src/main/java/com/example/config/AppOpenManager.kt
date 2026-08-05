@@ -9,7 +9,7 @@ import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.appopen.AppOpenAd
 
-private const val TAG = "AppOpenManager"
+private const val TAG = "MemoryQuestAds"
 
 class AppOpenManager(
     private val context: Context,
@@ -19,12 +19,14 @@ class AppOpenManager(
     private var isLoading = false
 
     fun fetchAd(onAdLoaded: (() -> Unit)? = null) {
+        if (!AdMobManager.canRequestAds()) {
+            Log.d(TAG, "canRequestAds e falso, ignorando solitação de App Open Ad.")
+            return
+        }
         if (isLoading || isAdAvailable()) return
         isLoading = true
 
-        if (BuildConfig.DEBUG) {
-            Log.d(TAG, "[DEBUG LOG] Carregando App Open Ad ($adUnitId)...")
-        }
+        Log.d(TAG, "App Open Ad solicitado: adUnitId=$adUnitId")
 
         AppOpenAd.load(
             context,
@@ -34,21 +36,19 @@ class AppOpenManager(
                 override fun onAdLoaded(ad: AppOpenAd) {
                     appOpenAd = ad
                     isLoading = false
-                    if (BuildConfig.DEBUG) {
-                        Log.d(TAG, "[DEBUG LOG] App Open Ad carregado.")
-                    }
+                    Log.d(TAG, "onAdLoaded - App Open Ad $adUnitId carregado com sucesso.")
                     onAdLoaded?.invoke()
                 }
 
                 override fun onAdFailedToLoad(loadAdError: LoadAdError) {
                     appOpenAd = null
                     isLoading = false
-                    if (BuildConfig.DEBUG) {
-                        Log.w(
-                            TAG,
-                            "[DEBUG LOG] Falha ao carregar App Open Ad - Code: ${loadAdError.code}, Message: ${loadAdError.message}"
-                        )
-                    }
+                    Log.w(
+                        TAG,
+                        "onAdFailedToLoad - Code: ${loadAdError.code}, " +
+                        "Domain: ${loadAdError.domain}, Message: ${loadAdError.message}, " +
+                        "ResponseInfo: ${loadAdError.responseInfo}"
+                    )
                 }
             }
         )
