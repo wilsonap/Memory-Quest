@@ -9,14 +9,14 @@ plugins {
 
 android {
   namespace = "com.example"
-  compileSdk = 35
+  compileSdk = 36
 
   defaultConfig {
     applicationId = "br.com.autocheckia.memory"
     minSdk = 24
-    targetSdk = 35
-    versionCode = 7
-    versionName = "1.1.7"
+    targetSdk = 36
+    versionCode = 8
+    versionName = "1.1.8"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     manifestPlaceholders["admobAppId"] = "ca-app-pub-9508188839425769~9719772999"
