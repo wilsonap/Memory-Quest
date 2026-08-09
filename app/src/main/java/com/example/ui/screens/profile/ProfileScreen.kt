@@ -204,6 +204,7 @@ fun ProfileScreen(
                 // 4. TEMAS DESBLOQUEADOS
                 ThemesPreview(
                     unlockedThemes = unlockedThemes,
+                    equippedThemeId = player?.equippedThemeId ?: "animals",
                     onNavigateToShop = onNavigateToShop
                 )
 

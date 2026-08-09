@@ -1,7 +1,7 @@
 package com.example.ui.screens.profile.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,8 +19,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -32,45 +30,32 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.local.entity.UnlockedThemeEntity
+import com.example.data.model.GameTheme
 import com.example.ui.theme.ImmersiveGold
-import com.example.ui.theme.ImmersivePrimary
 import com.example.ui.theme.ImmersiveSurface
-import com.example.ui.theme.ImmersiveSurfaceVariant
 import com.example.ui.theme.ImmersiveTextPrimary
 import com.example.ui.theme.ImmersiveTextSecondary
-
-data class ThemeThumbnail(
-    val id: String,
-    val name: String,
-    val emoji: String,
-    val color: Color,
-    val isUnlocked: Boolean
-)
 
 @Composable
 fun ThemesPreview(
     unlockedThemes: List<UnlockedThemeEntity>,
+    equippedThemeId: String = "animals",
     onNavigateToShop: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val unlockedThemeIds = unlockedThemes.map { it.themeId }.toSet()
 
-    // Up to 8 predefined game themes
-    val themesList = listOf(
-        ThemeThumbnail("theme_classic", "Clássico", "🎴", Color(0xFF7209B7), true),
-        ThemeThumbnail("theme_neon", "Neon Cyber", "⚡", Color(0xFF4CC9F0), unlockedThemeIds.contains("theme_neon")),
-        ThemeThumbnail("theme_nature", "Floresta", "🌿", Color(0xFF4EAD69), unlockedThemeIds.contains("theme_nature")),
-        ThemeThumbnail("theme_galaxy", "Galáxia", "🌌", Color(0xFF3F37C9), unlockedThemeIds.contains("theme_galaxy")),
-        ThemeThumbnail("theme_volcano", "Vulcão", "🌋", Color(0xFFF72585), unlockedThemeIds.contains("theme_volcano")),
-        ThemeThumbnail("theme_candy", "Doce", "🍭", Color(0xFFFF70A6), unlockedThemeIds.contains("theme_candy")),
-        ThemeThumbnail("theme_ocean", "Oceano", "🌊", Color(0xFF00B4D8), unlockedThemeIds.contains("theme_ocean")),
-        ThemeThumbnail("theme_gold", "Lendário", "👑", Color(0xFFFFD08A), unlockedThemeIds.contains("theme_gold"))
-    )
+    // Filter real game themes from GameTheme.ALL_THEMES that are unlocked
+    val unlockedGameThemes = GameTheme.ALL_THEMES.filter { theme ->
+        theme.isDefaultUnlocked || unlockedThemeIds.contains(theme.id)
+    }
 
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
@@ -79,7 +64,7 @@ fun ThemesPreview(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "TEMAS DESBLOQUEADOS",
+                text = "TEMAS DESBLOQUEADOS (${unlockedGameThemes.size})",
                 style = MaterialTheme.typography.labelMedium.copy(
                     fontWeight = FontWeight.Bold,
                     color = ImmersiveGold,
@@ -111,72 +96,122 @@ fun ThemesPreview(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 2.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            items(themesList) { theme ->
-                ThemeCardItem(theme = theme, onClick = onNavigateToShop)
+        if (unlockedGameThemes.isEmpty()) {
+            Surface(
+                color = ImmersiveSurface,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Nenhum tema desbloqueado. Visite a Loja!",
+                    style = MaterialTheme.typography.bodySmall.copy(color = ImmersiveTextSecondary),
+                    modifier = Modifier.padding(16.dp),
+                    textAlign = TextAlign.Center
+                )
+            }
+        } else {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                items(unlockedGameThemes, key = { it.id }) { theme ->
+                    val isEquipped = theme.id == equippedThemeId
+                    UnlockedThemeCardItem(
+                        theme = theme,
+                        isEquipped = isEquipped,
+                        onClick = onNavigateToShop
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun ThemeCardItem(
-    theme: ThemeThumbnail,
+private fun UnlockedThemeCardItem(
+    theme: GameTheme,
+    isEquipped: Boolean,
     onClick: () -> Unit
 ) {
+    val themeName = stringResource(theme.nameRes)
+    val emoji = theme.symbols.firstOrNull()?.first ?: "🎴"
+    val themeColor = Color(theme.primaryColorHex)
+
     Surface(
         color = ImmersiveSurface,
         shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(
+            width = if (isEquipped) 2.dp else 1.dp,
+            color = if (isEquipped) ImmersiveGold else themeColor.copy(alpha = 0.6f)
+        ),
         modifier = Modifier
-            .width(84.dp)
-            .height(96.dp)
-            .border(
-                1.dp,
-                if (theme.isUnlocked) theme.color.copy(alpha = 0.8f) else ImmersiveSurfaceVariant,
-                RoundedCornerShape(16.dp)
-            )
+            .width(108.dp)
             .clickable(onClick = onClick)
     ) {
         Column(
-            modifier = Modifier.padding(8.dp),
+            modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(if (theme.isUnlocked) theme.color.copy(alpha = 0.3f) else ImmersiveSurfaceVariant)
-            ) {
-                if (theme.isUnlocked) {
-                    Text(text = theme.emoji, fontSize = 20.sp)
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.Lock,
-                        contentDescription = "Bloqueado",
-                        tint = ImmersiveTextSecondary,
-                        modifier = Modifier.size(18.dp)
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        if (isEquipped) ImmersiveGold.copy(alpha = 0.25f)
+                        else themeColor.copy(alpha = 0.25f)
                     )
-                }
+            ) {
+                Text(text = emoji, fontSize = 22.sp)
             }
 
             Spacer(modifier = Modifier.height(6.dp))
 
             Text(
-                text = theme.name,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = if (theme.isUnlocked) FontWeight.Bold else FontWeight.Normal,
-                    color = if (theme.isUnlocked) ImmersiveTextPrimary else ImmersiveTextSecondary,
-                    fontSize = 10.sp
+                text = themeName,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = ImmersiveTextPrimary,
+                    fontSize = 11.sp
                 ),
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
             )
+
+            Spacer(modifier = Modifier.height(2.dp))
+
+            if (isEquipped) {
+                Surface(
+                    color = ImmersiveGold.copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Text(
+                        text = "EQUIPADO",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            color = ImmersiveGold,
+                            fontSize = 8.sp,
+                            letterSpacing = 0.5.sp
+                        ),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            } else {
+                Text(
+                    text = "Desbloqueado",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Medium,
+                        color = ImmersiveTextSecondary,
+                        fontSize = 9.sp
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
+

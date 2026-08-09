@@ -71,6 +71,9 @@ data class GameState(
     val elapsedTimeSeconds: Long = 0,
     val isTimerFrozen: Boolean = false,
     val remainingHints: Int = 3,
+    val freeHintsCount: Int = 0,
+    val freeRevealsCount: Int = 0,
+    val freeFreezesCount: Int = 0,
     val theme: GameTheme = GameTheme.ANIMALS,
     val frameId: String = "frame_classic",
     val totalFlips: Int = 0
@@ -88,8 +91,26 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(GameState())
     val uiState: StateFlow<GameState> = _uiState.asStateFlow()
 
+    init {
+        viewModelScope.launch {
+            repository.inventoryFlow.collect { items ->
+                val hints = items.find { it.itemId == "booster_hint" }?.quantity ?: 0
+                val reveals = items.find { it.itemId == "booster_reveal" }?.quantity ?: 0
+                val freezes = items.find { it.itemId == "booster_freeze" }?.quantity ?: 0
+                _uiState.update {
+                    it.copy(
+                        freeHintsCount = hints,
+                        freeRevealsCount = reveals,
+                        freeFreezesCount = freezes
+                    )
+                }
+            }
+        }
+    }
+
     private var firstFlippedIndex: Int? = null
     private var isProcessingFlip = false
+    private var isFreezingTimer = false
     private var timerJob: Job? = null
     private var previewJob: Job? = null
     private var startTimeMillis: Long = 0
@@ -225,6 +246,12 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
                     isProcessingFlip = false
 
+                    // Update daily quest progress
+                    repository.updateDailyQuestProgress("FIND_PAIRS", 1)
+                    if (newCombo >= 3) {
+                        repository.updateDailyQuestProgress("COMBO", 1)
+                    }
+
                     // Check for level completion
                     if (newPairsFound >= _uiState.value.totalPairs) {
                         onLevelSuccess()
@@ -275,6 +302,18 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 state.errorsCount == 0 -> 3
                 state.errorsCount <= 2 -> 2
                 else -> 1
+            }
+
+            // Update daily quest progress
+            repository.updateDailyQuestProgress("COMPLETE_LEVELS", 1)
+            if (stars == 3) {
+                repository.updateDailyQuestProgress("THREE_STARS", 1)
+            }
+            if (noHelpUsed || flawless) {
+                repository.updateDailyQuestProgress("WIN_NO_HELP", 1)
+            }
+            if (state.lives >= 1) {
+                repository.updateDailyQuestProgress("FINISH_WITH_LIFE", 1)
             }
 
             // Game economy rewards:
@@ -394,10 +433,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun useHint() {
         viewModelScope.launch {
-            val success = repository.consumeHint()
+            val hasFree = repository.consumeInventoryBooster("booster_hint")
+            val success = if (hasFree) true else repository.consumeHint()
             if (success) {
                 audioManager.playHint()
-                _uiState.update { it.copy(remainingHints = it.remainingHints - 1) }
+                if (!hasFree) {
+                    _uiState.update { it.copy(remainingHints = it.remainingHints - 1) }
+                }
 
                 // Find 1 unmatched pair and highlight them
                 val unmatched = _uiState.value.cards.filter { !it.isMatched && !it.isFaceUp }
@@ -424,7 +466,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun useRevealPair() {
         viewModelScope.launch {
-            if (repository.spendCoins(50, "REVEAL_PAIR")) {
+            val hasFree = repository.consumeInventoryBooster("booster_reveal")
+            if (hasFree || repository.spendCoins(150, "REVEAL_PAIR")) {
                 audioManager.playReveal()
                 val unmatched = _uiState.value.cards.filter { !it.isMatched }
                 val pair = unmatched.groupBy { it.pairId }.values.find { it.size >= 2 } ?: return@launch
@@ -443,6 +486,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
 
+                repository.updateDailyQuestProgress("FIND_PAIRS", 1)
+
                 if (newPairsFound >= _uiState.value.totalPairs) {
                     onLevelSuccess()
                 }
@@ -453,14 +498,31 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun freezeTimer() {
+        if (isFreezingTimer) return
+        val currentState = _uiState.value
+        if (currentState.status !is GameUiStatus.Previewing && currentState.status != GameUiStatus.Playing) return
+
         viewModelScope.launch {
-            if (repository.spendCoins(100, "EXTRA_TIME")) {
-                audioManager.playFreeze()
-                _uiState.update { it.copy(isTimerFrozen = true) }
-                delay(30000) // Freeze timer for 30s
-                _uiState.update { it.copy(isTimerFrozen = false) }
-            } else {
-                audioManager.playMismatch()
+            isFreezingTimer = true
+            try {
+                val hasFree = repository.consumeInventoryBooster("booster_freeze")
+                if (hasFree || repository.spendCoins(110, "EXTRA_TIME")) {
+                    audioManager.playFreeze()
+                    val latestState = _uiState.value
+                    if (latestState.status is GameUiStatus.Previewing) {
+                        val remaining = (latestState.status as GameUiStatus.Previewing).remainingSeconds
+                        val newRemaining = remaining + 10
+                        startPreviewCountdown(newRemaining)
+                    } else if (latestState.status == GameUiStatus.Playing) {
+                        _uiState.update { it.copy(isTimerFrozen = true) }
+                        delay(30000) // Freeze timer for 30s during gameplay
+                        _uiState.update { it.copy(isTimerFrozen = false) }
+                    }
+                } else {
+                    audioManager.playMismatch()
+                }
+            } finally {
+                isFreezingTimer = false
             }
         }
     }

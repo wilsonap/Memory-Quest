@@ -77,6 +77,7 @@ fun MemoryQuestNavGraph(
     val stats by mainViewModel.statsState.collectAsStateWithLifecycle()
     val unlockedThemes by mainViewModel.unlockedThemesState.collectAsStateWithLifecycle()
     val achievements by mainViewModel.achievementsState.collectAsStateWithLifecycle()
+    val dailyQuests by mainViewModel.dailyQuestsState.collectAsStateWithLifecycle()
     val usernameUiState by mainViewModel.usernameUiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
@@ -181,6 +182,7 @@ fun MemoryQuestNavGraph(
             val activity = context as? android.app.Activity
             HomeScreen(
                 player = player,
+                dailyQuests = dailyQuests,
                 onPlayClick = {
                     mainViewModel.audioManager.playButton()
                     val currentLvl = player?.currentLevel ?: 1
@@ -227,6 +229,28 @@ fun MemoryQuestNavGraph(
                 onWatchRewardedAd = {
                     if (activity != null) {
                         mainViewModel.showRewardedAd(activity) { success, msg ->
+                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        Toast.makeText(context, "Atividade indisponível para carregar vídeo.", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onClaimDailyChest = {
+                    mainViewModel.claimDailyChest { reward ->
+                        if (reward != null) {
+                            if (reward.first == "COINS") {
+                                Toast.makeText(context, "Baú Diário Aberto! +${reward.second} 🪙", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(context, "Baú Diário Aberto! Você ganhou 1 Booster!", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            Toast.makeText(context, "Complete 3 missões para abrir o baú!", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                },
+                onDoubleDailyChestReward = {
+                    if (activity != null) {
+                        mainViewModel.doubleDailyChestReward(activity) { success, msg ->
                             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                         }
                     } else {

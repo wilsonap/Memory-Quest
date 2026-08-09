@@ -165,31 +165,31 @@ fun GameScreen(
                     ) {
                         // Hint Booster
                         BoosterActionButton(
-                            title = stringResource(R.string.game_hint_button, state.remainingHints),
+                            title = if (state.freeHintsCount > 0) "Dica GRÁTIS (x${state.freeHintsCount})" else stringResource(R.string.game_hint_button, state.remainingHints),
                             icon = Icons.Default.Lightbulb,
                             tint = Color(0xFFFFB703),
                             onClick = onUseHint,
-                            enabled = state.status is GameUiStatus.Playing && state.remainingHints > 0,
+                            enabled = state.status is GameUiStatus.Playing && (state.freeHintsCount > 0 || state.remainingHints > 0),
                             testTag = "booster_hint_button"
                         )
 
                         // Reveal Pair
                         BoosterActionButton(
-                            title = "${stringResource(R.string.game_reveal_button)} (150💰)",
+                            title = if (state.freeRevealsCount > 0) "Revelar GRÁTIS (x${state.freeRevealsCount})" else "${stringResource(R.string.game_reveal_button)} (150💰)",
                             icon = Icons.Default.Visibility,
                             tint = Color(0xFF4CC9F0),
                             onClick = onRevealPair,
-                            enabled = state.status is GameUiStatus.Playing && coins >= 150,
+                            enabled = state.status is GameUiStatus.Playing && (state.freeRevealsCount > 0 || coins >= 150),
                             testTag = "booster_reveal_button"
                         )
 
                         // Freeze Timer
                         BoosterActionButton(
-                            title = "${stringResource(R.string.game_freeze_button)} (110💰)",
+                            title = if (state.freeFreezesCount > 0) "Congelar GRÁTIS (x${state.freeFreezesCount})" else "${stringResource(R.string.game_freeze_button)} (110💰)",
                             icon = Icons.Default.AcUnit,
                             tint = Color(0xFFE0AAFF),
                             onClick = onFreezeTimer,
-                            enabled = state.status is GameUiStatus.Playing && coins >= 110 && !state.isTimerFrozen,
+                            enabled = (state.status is GameUiStatus.Playing || state.status is GameUiStatus.Previewing) && !state.isTimerFrozen && (state.freeFreezesCount > 0 || coins >= 110),
                             testTag = "booster_freeze_button"
                         )
                     }

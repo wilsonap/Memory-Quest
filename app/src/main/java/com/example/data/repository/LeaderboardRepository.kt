@@ -321,13 +321,14 @@ class LeaderboardRepository(
      * 4. uid (ascending)
      */
     suspend fun fetchTop100Leaderboard(
-        source: Source = Source.DEFAULT
+        source: Source = Source.DEFAULT,
+        limit: Long = 50L
     ): Result<List<LeaderboardPlayer>> {
         return try {
             val currentUid = getCurrentUserId() ?: ensureAuthenticated()
             val querySnapshot = firestore.collection("leaderboard")
                 .orderBy("totalScore", Query.Direction.DESCENDING)
-                .limit(100)
+                .limit(limit)
                 .get(source)
                 .await()
 

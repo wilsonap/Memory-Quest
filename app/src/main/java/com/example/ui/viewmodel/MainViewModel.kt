@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.local.AppDatabase
 import com.example.data.local.DataStoreManager
 import com.example.data.local.entity.AchievementEntity
+import com.example.data.local.entity.DailyQuestEntity
 import com.example.data.local.entity.PlayerEntity
 import com.example.data.local.entity.StatisticsEntity
 import com.example.data.local.entity.UnlockedThemeEntity
@@ -131,6 +132,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         initialValue = emptyList()
     )
 
+    val dailyQuestsState: StateFlow<List<DailyQuestEntity>> = repository.getDailyQuestsFlow().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
     val soundEnabled: StateFlow<Boolean> = repository.soundEnabled.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -158,6 +165,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     init {
         viewModelScope.launch {
             dataStore.recordFirstAppUseDateIfAbsent()
+            repository.ensureDailyQuestsForToday()
         }
         audioManager.observeSettings(dataStore, viewModelScope)
 
@@ -535,6 +543,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             onResult(rewardAmount)
         }
+    }
+
+    fun claimDailyChest(onResult: (Pair<String, Any>?) -> Unit) {
+        viewModelScope.launch {
+            val reward = repository.claimDailyChest()
+            if (reward != null) {
+                audioManager.playCoin()
+            }
+            onResult(reward)
+        }
+    }
+
+    fun doubleDailyChestReward(activity: android.app.Activity, onResult: (Boolean, String) -> Unit) {
+        val rewardedManager = com.example.config.RewardedManager(activity)
+        rewardedManager.loadAd(
+            onAdLoaded = {
+                rewardedManager.show(
+                    activity = activity,
+                    onUserEarnedReward = { _, _ ->
+                        viewModelScope.launch {
+                            val success = repository.doubleDailyChestReward()
+                            if (success) {
+                                audioManager.playCoin()
+                                onResult(true, "Recompensa dobrada com sucesso!")
+                            } else {
+                                onResult(false, "Não foi possível dobrar o baú.")
+                            }
+                        }
+                    },
+                    onAdDismissed = { }
+                )
+            },
+            onAdFailed = {
+                onResult(false, "Vídeo não disponível no momento. Tente novamente em instantes.")
+            }
+        )
     }
 
     fun showRewardedAd(activity: android.app.Activity, onResult: (Boolean, String) -> Unit) {

@@ -1,9 +1,11 @@
 package com.example.data.repository
 
 import android.util.Log
+import androidx.room.Transaction
 import com.example.data.local.DataStoreManager
 import com.example.data.local.dao.MemoryQuestDao
 import com.example.data.local.entity.AchievementEntity
+import com.example.data.local.entity.DailyQuestEntity
 import com.example.data.local.entity.PlayerEntity
 import com.example.data.local.entity.StatisticsEntity
 import com.example.data.local.entity.UnlockedThemeEntity
@@ -398,7 +400,205 @@ class GameRepository(
         dao.clearAchievements()
         dao.clearInventory()
         dao.clearUnlockedThemes()
+        dao.clearDailyQuests()
         dao.deleteAllStatistics()
         dao.deleteAllPlayers()
+    }
+
+    // --- DAILY QUESTS & DAILY CHEST ---
+
+    fun getTodayDateString(): String {
+        return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+    }
+
+    fun getDailyQuestsFlow(todayDate: String = getTodayDateString()): Flow<List<DailyQuestEntity>> {
+        return dao.getDailyQuestsFlow(todayDate)
+    }
+
+    val inventoryFlow: Flow<List<com.example.data.local.entity.InventoryEntity>> = dao.getInventoryFlow()
+
+    suspend fun consumeInventoryBooster(itemId: String): Boolean {
+        val item = dao.getInventoryItem(itemId) ?: return false
+        if (item.quantity > 1) {
+            dao.insertOrUpdateInventoryItem(item.copy(quantity = item.quantity - 1))
+        } else {
+            dao.deleteInventoryItem(itemId)
+        }
+        return true
+    }
+
+    suspend fun ensureDailyQuestsForToday(todayDate: String = getTodayDateString()): List<DailyQuestEntity> {
+        val existing = dao.getDailyQuests(todayDate)
+        if (existing.size == 3) {
+            return existing
+        }
+
+        dao.deleteOldDailyQuests(todayDate)
+
+        val questOptions = listOf(
+            "FIND_PAIRS" to 20,
+            "FIND_PAIRS" to 40,
+            "COMPLETE_LEVELS" to 2,
+            "COMPLETE_LEVELS" to 3,
+            "THREE_STARS" to 1,
+            "WIN_NO_HELP" to 1,
+            "COMBO" to 3,
+            "FINISH_WITH_LIFE" to 1
+        )
+
+        val selectedTypes = mutableSetOf<String>()
+        val newQuests = mutableListOf<DailyQuestEntity>()
+
+        val shuffled = questOptions.shuffled()
+        var questIndex = 1
+        for (option in shuffled) {
+            if (!selectedTypes.contains(option.first) && selectedTypes.size < 3) {
+                selectedTypes.add(option.first)
+                newQuests.add(
+                    DailyQuestEntity(
+                        id = "quest_$questIndex",
+                        questType = option.first,
+                        targetProgress = option.second,
+                        currentProgress = 0,
+                        isCompleted = false,
+                        dateString = todayDate
+                    )
+                )
+                questIndex++
+            }
+        }
+
+        dao.insertOrUpdateDailyQuests(newQuests)
+
+        val player = dao.getPlayer()
+        if (player != null && player.dailyChestDate != todayDate) {
+            val updatedPlayer = player.copy(
+                dailyChestClaimed = false,
+                dailyChestDoubled = false,
+                dailyChestDate = todayDate,
+                dailyChestRewardType = "",
+                dailyChestRewardAmount = 0,
+                dailyChestRewardBoosterId = ""
+            )
+            dao.insertOrUpdatePlayer(updatedPlayer)
+        }
+
+        return newQuests
+    }
+
+    suspend fun updateDailyQuestProgress(questType: String, increment: Int = 1) {
+        val today = getTodayDateString()
+        val quests = ensureDailyQuestsForToday(today)
+
+        val targetQuest = quests.find { it.questType == questType && !it.isCompleted } ?: return
+        val newProgress = (targetQuest.currentProgress + increment).coerceAtMost(targetQuest.targetProgress)
+        val isNowCompleted = newProgress >= targetQuest.targetProgress
+
+        val updated = targetQuest.copy(
+            currentProgress = newProgress,
+            isCompleted = isNowCompleted
+        )
+        dao.insertOrUpdateDailyQuest(updated)
+    }
+
+    @Transaction
+    suspend fun claimDailyChest(): Pair<String, Any>? {
+        val today = getTodayDateString()
+        val player = dao.getPlayer() ?: return null
+
+        if (player.dailyChestClaimed && player.dailyChestDate == today) {
+            return null
+        }
+
+        val quests = dao.getDailyQuests(today)
+        if (quests.size < 3 || quests.any { !it.isCompleted }) {
+            return null
+        }
+
+        val roll = (1..100).random()
+        val rewardType: String
+        var rewardAmount = 0
+        var boosterId = ""
+
+        when {
+            roll <= 60 -> {
+                rewardType = "COINS"
+                rewardAmount = 100
+            }
+            roll <= 85 -> {
+                rewardType = "COINS"
+                rewardAmount = 150
+            }
+            roll <= 95 -> {
+                rewardType = "BOOSTER"
+                val boosterList = listOf("booster_reveal", "booster_hint", "booster_freeze", "booster_time", "booster_life")
+                boosterId = boosterList.random()
+                rewardAmount = 1
+            }
+            else -> {
+                rewardType = "COINS"
+                rewardAmount = 300
+            }
+        }
+
+        if (rewardType == "COINS") {
+            val updatedPlayer = player.copy(
+                coins = player.coins + rewardAmount,
+                dailyChestClaimed = true,
+                dailyChestDoubled = false,
+                dailyChestDate = today,
+                dailyChestRewardType = "COINS",
+                dailyChestRewardAmount = rewardAmount,
+                dailyChestRewardBoosterId = ""
+            )
+            dao.insertOrUpdatePlayer(updatedPlayer)
+            return Pair("COINS", rewardAmount)
+        } else {
+            val existingItem = dao.getInventoryItem(boosterId)
+            val newQty = (existingItem?.quantity ?: 0) + 1
+            dao.insertOrUpdateInventoryItem(
+                com.example.data.local.entity.InventoryEntity(
+                    itemId = boosterId,
+                    itemType = "BOOSTER",
+                    quantity = newQty
+                )
+            )
+
+            val updatedPlayer = player.copy(
+                dailyChestClaimed = true,
+                dailyChestDoubled = false,
+                dailyChestDate = today,
+                dailyChestRewardType = "BOOSTER",
+                dailyChestRewardAmount = 1,
+                dailyChestRewardBoosterId = boosterId
+            )
+            dao.insertOrUpdatePlayer(updatedPlayer)
+            return Pair("BOOSTER", boosterId)
+        }
+    }
+
+    @Transaction
+    suspend fun doubleDailyChestReward(): Boolean {
+        val today = getTodayDateString()
+        val player = dao.getPlayer() ?: return false
+
+        if (!player.dailyChestClaimed || player.dailyChestDoubled || player.dailyChestRewardType != "COINS" || player.dailyChestRewardAmount <= 0) {
+            return false
+        }
+
+        val currentAdsWatched = if (player.rewardedAdsDate == today) player.rewardedAdsToday else 0
+        if (currentAdsWatched >= 5) {
+            return false
+        }
+
+        val extraCoins = player.dailyChestRewardAmount
+        val updatedPlayer = player.copy(
+            coins = player.coins + extraCoins,
+            dailyChestDoubled = true,
+            rewardedAdsToday = currentAdsWatched + 1,
+            rewardedAdsDate = today
+        )
+        dao.insertOrUpdatePlayer(updatedPlayer)
+        return true
     }
 }

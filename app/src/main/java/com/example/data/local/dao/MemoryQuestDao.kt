@@ -6,6 +6,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import com.example.data.local.entity.AchievementEntity
+import com.example.data.local.entity.DailyQuestEntity
 import com.example.data.local.entity.InventoryEntity
 import com.example.data.local.entity.PlayerEntity
 import com.example.data.local.entity.StatisticsEntity
@@ -84,6 +85,29 @@ interface MemoryQuestDao {
 
     @Query("SELECT * FROM inventory WHERE itemId = :itemId")
     suspend fun getInventoryItem(itemId: String): InventoryEntity?
+
+    @Query("DELETE FROM inventory WHERE itemId = :itemId")
+    suspend fun deleteInventoryItem(itemId: String)
+
+
+    // --- Daily Quests ---
+    @Query("SELECT * FROM daily_quests WHERE dateString = :dateString")
+    fun getDailyQuestsFlow(dateString: String): Flow<List<DailyQuestEntity>>
+
+    @Query("SELECT * FROM daily_quests WHERE dateString = :dateString")
+    suspend fun getDailyQuests(dateString: String): List<DailyQuestEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOrUpdateDailyQuests(quests: List<DailyQuestEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOrUpdateDailyQuest(quest: DailyQuestEntity)
+
+    @Query("DELETE FROM daily_quests WHERE dateString != :todayDate")
+    suspend fun deleteOldDailyQuests(todayDate: String)
+
+    @Query("DELETE FROM daily_quests")
+    suspend fun clearDailyQuests()
 
 
     // --- Achievements ---

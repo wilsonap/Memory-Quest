@@ -37,7 +37,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,9 +57,12 @@ import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.avatar.model.AvatarType
 import com.example.avatar.ui.AvatarImage
+import com.example.data.local.entity.DailyQuestEntity
 import com.example.data.local.entity.PlayerEntity
 import com.example.ui.components.BannerAdContainer
 import com.example.ui.components.BannerAdView
+import com.example.ui.components.DailyQuestsCard
+import com.example.ui.components.DailyQuestsDialog
 import com.example.ui.components.SparkleParticleOverlay
 import com.example.ui.screens.profile.model.PlayerTitle
 import com.example.ui.screens.profile.util.XPCalculator
@@ -74,6 +79,7 @@ import com.example.ui.theme.ImmersiveTextSecondary
 @Composable
 fun HomeScreen(
     player: PlayerEntity?,
+    dailyQuests: List<DailyQuestEntity> = emptyList(),
     onPlayClick: () -> Unit,
     onProfileClick: () -> Unit = {},
     onRankingClick: () -> Unit,
@@ -83,9 +89,13 @@ fun HomeScreen(
     onAchievementsClick: () -> Unit,
     onClaimDailyReward: () -> Unit = {},
     onWatchRewardedAd: () -> Unit = {},
+    onClaimDailyChest: () -> Unit = {},
+    onDoubleDailyChestReward: () -> Unit = {},
     isAdsRemoved: Boolean = false,
     modifier: Modifier = Modifier
 ) {
+    var showDailyQuestsDialog by remember { mutableStateOf(false) }
+
     val playerName = player?.name?.ifEmpty { "Alessandro" } ?: "Alessandro"
     val level = (player?.highestLevel ?: 1).coerceAtLeast(1)
     val playerTitle = PlayerTitle.getTitleForLevel(level)
@@ -428,6 +438,16 @@ fun HomeScreen(
                 }
             }
 
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Daily Quests Section
+            DailyQuestsCard(
+                quests = dailyQuests,
+                player = player,
+                onClick = { showDailyQuestsDialog = true },
+                onClaimChest = onClaimDailyChest
+            )
+
             Spacer(modifier = Modifier.height(20.dp))
 
             // Bottom Navigation Cards Grid
@@ -518,6 +538,16 @@ fun HomeScreen(
         }
     }
 }
+
+    if (showDailyQuestsDialog) {
+        DailyQuestsDialog(
+            quests = dailyQuests,
+            player = player,
+            onDismiss = { showDailyQuestsDialog = false },
+            onClaimChest = onClaimDailyChest,
+            onDoubleReward = onDoubleDailyChestReward
+        )
+    }
 }
 
 @Composable

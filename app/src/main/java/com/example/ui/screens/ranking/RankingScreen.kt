@@ -118,14 +118,14 @@ fun RankingScreen(
     val userRankDisplay = remember(currentUserInLeaderboard, leaderboardList) {
         when {
             currentUserInLeaderboard != null -> "#${currentUserInLeaderboard.rank}"
-            leaderboardList.isNotEmpty() -> "Fora do Top 100"
+            leaderboardList.isNotEmpty() -> "Sem Posição"
             else -> "Sua Posição"
         }
     }
 
-    // Filter out current player from list to prevent double rendering
-    val otherPlayersInLeaderboard = remember(leaderboardList) {
-        leaderboardList.distinctBy { it.uid }.filterNot { it.isCurrentUser }
+    // Top 3 players only
+    val top3Players = remember(leaderboardList) {
+        leaderboardList.distinctBy { it.uid }.take(3)
     }
 
     Scaffold(
@@ -165,75 +165,58 @@ fun RankingScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            when (selectedTab) {
-                RankingTab.GLOBAL -> {
-                    // Fixed "Minha Posição" card at top
-                    MyPositionCard(
-                        userRankDisplay = userRankDisplay,
-                        playerName = playerName,
-                        playerScore = calculatedScore,
-                        playerHighestLevel = playerHighestLevel,
-                        playerTotalPairs = playerTotalPairs,
-                        avatarType = player?.avatarType ?: AvatarType.PRESET.name,
-                        avatarPresetId = player?.avatarPresetId ?: "avatar_01",
-                        avatarLocalPath = player?.avatarLocalPath ?: ""
+            // Fixed "Minha Posição" card at top
+            MyPositionCard(
+                userRankDisplay = userRankDisplay,
+                playerName = playerName,
+                playerScore = calculatedScore,
+                playerHighestLevel = playerHighestLevel,
+                playerTotalPairs = playerTotalPairs,
+                avatarType = player?.avatarType ?: AvatarType.PRESET.name,
+                avatarPresetId = player?.avatarPresetId ?: "avatar_01",
+                avatarLocalPath = player?.avatarLocalPath ?: ""
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // List Section Header: 🏆 TOP 3
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "🏆 TOP 3",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        color = ImmersiveGold,
+                        letterSpacing = 1.sp
                     )
+                )
+            }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
-                    // List Section Header
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "TOP 100 JOGADORES",
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = ImmersiveGold,
-                                letterSpacing = 1.sp
-                            )
-                        )
-
-                        Text(
-                            text = if (otherPlayersInLeaderboard.isNotEmpty()) {
-                                "${otherPlayersInLeaderboard.size + if (currentUserInLeaderboard != null) 1 else 0} classificados"
-                            } else "",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                color = ImmersiveTextSecondary
-                            )
+            // Main Content Body (Loading Skeletons, Empty, Error, or Top 3 List)
+            Box(modifier = Modifier.weight(1f)) {
+                when {
+                    isLoading && leaderboardList.isEmpty() -> {
+                        SkeletonLoadingList()
+                    }
+                    !isLoading && leaderboardList.isEmpty() && errorMessage != null -> {
+                        ErrorOfflineView(onRetry = onRefresh)
+                    }
+                    !isLoading && leaderboardList.isEmpty() -> {
+                        EmptyLeaderboardView(onRefresh = onRefresh)
+                    }
+                    else -> {
+                        Top3List(
+                            players = top3Players,
+                            player = player
                         )
                     }
-
-                    // Main Content Body (Loading Skeletons, Empty, Error, or List)
-                    Box(modifier = Modifier.weight(1f)) {
-                        when {
-                            isLoading && leaderboardList.isEmpty() -> {
-                                SkeletonLoadingList()
-                            }
-                            !isLoading && leaderboardList.isEmpty() && errorMessage != null -> {
-                                ErrorOfflineView(onRetry = onRefresh)
-                            }
-                            !isLoading && leaderboardList.isEmpty() -> {
-                                EmptyLeaderboardView(onRefresh = onRefresh)
-                            }
-                            else -> {
-                                Top100List(
-                                    players = otherPlayersInLeaderboard,
-                                    player = player
-                                )
-                            }
-                        }
-                    }
-                }
-                RankingTab.WEEKLY -> {
-                    ComingSoonTab(tabName = "Semanal")
-                }
-                RankingTab.MONTHLY -> {
-                    ComingSoonTab(tabName = "Mensal")
                 }
             }
         }
@@ -554,7 +537,7 @@ private fun MyPositionCard(
 }
 
 @Composable
-private fun Top100List(
+private fun Top3List(
     players: List<LeaderboardPlayer>,
     player: PlayerEntity?
 ) {
@@ -774,7 +757,7 @@ private fun SkeletonLoadingList() {
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        repeat(6) {
+        repeat(3) {
             Surface(
                 color = ImmersiveSurface,
                 shape = RoundedCornerShape(20.dp),

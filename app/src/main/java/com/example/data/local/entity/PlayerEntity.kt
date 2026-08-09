@@ -28,7 +28,13 @@ data class PlayerEntity(
     val lastDailyRewardDate: Long = 0L,
     val dailyRewardStreak: Int = 0,
     val rewardedAdsToday: Int = 0,
-    val rewardedAdsDate: String = ""
+    val rewardedAdsDate: String = "",
+    val dailyChestClaimed: Boolean = false,
+    val dailyChestDoubled: Boolean = false,
+    val dailyChestDate: String = "",
+    val dailyChestRewardType: String = "",
+    val dailyChestRewardAmount: Int = 0,
+    val dailyChestRewardBoosterId: String = ""
 ) {
     val bonusLives: Int get() = extraLives
     val defaultLives: Int get() = 3

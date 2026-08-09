@@ -9,6 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.data.local.dao.MemoryQuestDao
 import com.example.data.local.dao.PendingSyncDao
 import com.example.data.local.entity.AchievementEntity
+import com.example.data.local.entity.DailyQuestEntity
 import com.example.data.local.entity.InventoryEntity
 import com.example.data.local.entity.PendingSyncEntity
 import com.example.data.local.entity.PlayerEntity
@@ -22,9 +23,10 @@ import com.example.data.local.entity.UnlockedThemeEntity
         InventoryEntity::class,
         UnlockedThemeEntity::class,
         AchievementEntity::class,
-        PendingSyncEntity::class
+        PendingSyncEntity::class,
+        DailyQuestEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -97,6 +99,30 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `daily_quests` (
+                        `id` TEXT NOT NULL,
+                        `questType` TEXT NOT NULL,
+                        `targetProgress` INTEGER NOT NULL,
+                        `currentProgress` INTEGER NOT NULL DEFAULT 0,
+                        `isCompleted` INTEGER NOT NULL DEFAULT 0,
+                        `dateString` TEXT NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("ALTER TABLE `player` ADD COLUMN `dailyChestClaimed` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `player` ADD COLUMN `dailyChestDoubled` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `player` ADD COLUMN `dailyChestDate` TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE `player` ADD COLUMN `dailyChestRewardType` TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE `player` ADD COLUMN `dailyChestRewardAmount` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `player` ADD COLUMN `dailyChestRewardBoosterId` TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         val MIGRATION_4_6 = object : Migration(4, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 // Previne perdas na transição 4 -> 6
@@ -138,6 +164,7 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_4_5,
                         MIGRATION_5_6,
                         MIGRATION_6_7,
+                        MIGRATION_7_8,
                         MIGRATION_4_6,
                         MIGRATION_3_6,
                         MIGRATION_2_6,
