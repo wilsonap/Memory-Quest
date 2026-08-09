@@ -36,6 +36,37 @@ class DataStoreManager(private val context: Context) {
 
         val KEY_CACHED_LAST_USERNAME_CHANGE_AT = longPreferencesKey("cached_last_username_change_at")
         val KEY_CACHED_NEXT_USERNAME_CHANGE_AT = longPreferencesKey("cached_next_username_change_at")
+
+        val KEY_FIRST_APP_USE_DATE = longPreferencesKey("first_app_use_date")
+        val KEY_REVIEW_REQUEST_ATTEMPTED = booleanPreferencesKey("review_request_attempted")
+        val KEY_LAST_REVIEW_REQUEST_DATE = longPreferencesKey("last_review_request_date")
+    }
+
+    val firstAppUseDate: Flow<Long> = context.dataStore.data.map { prefs ->
+        prefs[KEY_FIRST_APP_USE_DATE] ?: 0L
+    }
+
+    val reviewRequestAttempted: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_REVIEW_REQUEST_ATTEMPTED] ?: false
+    }
+
+    val lastReviewRequestDate: Flow<Long> = context.dataStore.data.map { prefs ->
+        prefs[KEY_LAST_REVIEW_REQUEST_DATE] ?: 0L
+    }
+
+    suspend fun recordFirstAppUseDateIfAbsent(timestamp: Long = System.currentTimeMillis()) {
+        context.dataStore.edit { prefs ->
+            if (prefs[KEY_FIRST_APP_USE_DATE] == null || prefs[KEY_FIRST_APP_USE_DATE] == 0L) {
+                prefs[KEY_FIRST_APP_USE_DATE] = timestamp
+            }
+        }
+    }
+
+    suspend fun recordReviewAttempt(timestamp: Long = System.currentTimeMillis()) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_REVIEW_REQUEST_ATTEMPTED] = true
+            prefs[KEY_LAST_REVIEW_REQUEST_DATE] = timestamp
+        }
     }
 
     val cachedLastUsernameChangeAt: Flow<Long?> = context.dataStore.data.map { prefs ->

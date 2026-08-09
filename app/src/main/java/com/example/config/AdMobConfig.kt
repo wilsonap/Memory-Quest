@@ -20,7 +20,7 @@ object AdMobConfig {
     // --- PRODUCTION REAL ADMOB IDs ---
     private const val PROD_APP_ID = "ca-app-pub-9508188839425769~9719772999"
     private const val PROD_BANNER_ID = "ca-app-pub-9508188839425769/6933827559"
-    private const val PROD_REWARDED_ID = "ca-app-pub-9508188839425769/0000000000" // Reserved for future expansion
+    private const val PROD_REWARDED_ID = "ca-app-pub-9508188839425769/1234188018"
 
     val isDebugMode: Boolean
         get() = BuildConfig.DEBUG

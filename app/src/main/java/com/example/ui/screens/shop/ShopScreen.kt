@@ -82,6 +82,7 @@ fun ShopScreen(
     onSelectTheme: (String) -> Unit,
     onBuyFrame: (ShopItem) -> Unit,
     onBuyBooster: (String, Int) -> Unit,
+    onWatchRewardedAd: () -> Unit = {},
     onBackClick: () -> Unit,
     isAdsRemoved: Boolean = false,
     modifier: Modifier = Modifier
@@ -89,6 +90,14 @@ fun ShopScreen(
     var selectedTab by remember { mutableIntStateOf(0) }
     val coins = player?.coins ?: 0
     val unlockedThemeIds = unlockedThemes.map { it.themeId }.toSet()
+
+    val dateFormat = remember { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()) }
+    val todayString = remember { dateFormat.format(java.util.Date()) }
+    val remainingVideos = remember(player?.rewardedAdsDate, player?.rewardedAdsToday) {
+        if (player?.rewardedAdsDate == todayString) {
+            (5 - (player.rewardedAdsToday)).coerceAtLeast(0)
+        } else 5
+    }
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -155,7 +164,73 @@ fun ShopScreen(
             ) {
                 when (selectedTab) {
                     0 -> {
-                        // BOOSTERS
+                        // BOOSTERS & REWARDED AD
+                        item {
+                            Surface(
+                                color = Color(0xFF2C1E54),
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .border(1.5.dp, Color(0xFFFFB703), RoundedCornerShape(16.dp))
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFFFFB703).copy(alpha = 0.2f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(text = "🎬", fontSize = 24.sp)
+                                    }
+
+                                    Spacer(modifier = Modifier.width(12.dp))
+
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Ganhar Moedas Grátis",
+                                            style = MaterialTheme.typography.titleMedium.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFFFFB703)
+                                            )
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = if (remainingVideos > 0) "Assista a um vídeo curto e ganhe +100 🪙 ($remainingVideos/5 hoje)" else "Limite de 5 vídeos atingido hoje. Volte amanhã!",
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                color = Color.White.copy(alpha = 0.8f)
+                                            )
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.width(8.dp))
+
+                                    Button(
+                                        onClick = onWatchRewardedAd,
+                                        enabled = remainingVideos > 0,
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = Color(0xFFFFB703),
+                                            disabledContainerColor = Color(0xFF383120)
+                                        ),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Text(
+                                            text = "+100 🪙",
+                                            style = MaterialTheme.typography.labelLarge.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (remainingVideos > 0) Color.Black else Color.Gray
+                                            )
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
                         items(ShopItem.SHOP_BOOSTERS) { booster ->
                             BoosterShopCard(
                                 booster = booster,

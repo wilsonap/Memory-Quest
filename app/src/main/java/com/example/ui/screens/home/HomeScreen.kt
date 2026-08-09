@@ -81,6 +81,8 @@ fun HomeScreen(
     onSettingsClick: () -> Unit,
     onStatsClick: () -> Unit,
     onAchievementsClick: () -> Unit,
+    onClaimDailyReward: () -> Unit = {},
+    onWatchRewardedAd: () -> Unit = {},
     isAdsRemoved: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -345,7 +347,88 @@ fun HomeScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Daily Reward & Rewarded Video Section
+            val dateFormat = remember { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()) }
+            val todayString = remember { dateFormat.format(java.util.Date()) }
+            val lastRewardDateString = remember(player?.lastDailyRewardDate) {
+                if ((player?.lastDailyRewardDate ?: 0L) > 0L) dateFormat.format(java.util.Date(player!!.lastDailyRewardDate)) else ""
+            }
+            val isDailyClaimed = lastRewardDateString == todayString
+            val remainingVideosToday = remember(player?.rewardedAdsDate, player?.rewardedAdsToday) {
+                if (player?.rewardedAdsDate == todayString) {
+                    (5 - (player.rewardedAdsToday)).coerceAtLeast(0)
+                } else 5
+            }
+
+            Surface(
+                color = ImmersiveSurface,
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, ImmersiveGold.copy(alpha = 0.4f), RoundedCornerShape(20.dp))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (isDailyClaimed) "Recompensa Diária Coletada ✨" else "Recompensa Diária Disponível! 🎁",
+                            style = MaterialTheme.typography.titleSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = ImmersiveGold,
+                                fontSize = 13.sp
+                            )
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = if (isDailyClaimed) "Vídeos premiados hoje: $remainingVideosToday/5 restantes (+100 🪙 cada)" else "Resgate suas moedas diárias gratuitas!",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = ImmersiveTextSecondary,
+                                fontSize = 11.sp
+                            )
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    if (!isDailyClaimed) {
+                        androidx.compose.material3.Button(
+                            onClick = onClaimDailyReward,
+                            colors = ButtonDefaults.buttonColors(containerColor = ImmersiveGold),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Resgatar", style = MaterialTheme.typography.labelMedium.copy(color = Color.Black, fontWeight = FontWeight.Bold))
+                        }
+                    } else if (remainingVideosToday > 0) {
+                        OutlinedButton(
+                            onClick = onWatchRewardedAd,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, ImmersivePrimary),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Vídeo +100 🪙", style = MaterialTheme.typography.labelSmall.copy(color = ImmersivePrimary, fontWeight = FontWeight.Bold))
+                        }
+                    } else {
+                        Surface(
+                            color = ImmersiveSurfaceVariant,
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = "Volte Amanhã ✓",
+                                style = MaterialTheme.typography.labelSmall.copy(color = ImmersiveTextSecondary, fontWeight = FontWeight.Bold),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
 
             // Bottom Navigation Cards Grid
             Column(

@@ -48,7 +48,7 @@ enum class MusicTrack {
 class GameAudioManager private constructor(private val context: Context) {
 
     companion object {
-        private const val TAG = "MemoryQuestAudio"
+        private const val TAG = "MemoryQuest_Audio"
 
         @Volatile
         private var INSTANCE: GameAudioManager? = null

@@ -81,6 +81,7 @@ dependencies {
   implementation(libs.kotlinx.coroutines.play.services)
   implementation(libs.play.services.ads)
   implementation(libs.user.messaging.platform)
+  implementation(libs.play.review.ktx)
   implementation(libs.androidx.media3.exoplayer)
 
   implementation(libs.androidx.activity.compose)

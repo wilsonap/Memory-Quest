@@ -269,16 +269,22 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val state = _uiState.value
             val flawless = state.errorsCount == 0
-            val flawlessBonus = if (flawless) 50 else 0
-            val levelWinBonus = 100
-            val comboBonus = state.maxCombo * 10
-            val totalCoinsEarned = state.coinsEarnedInGame + levelWinBonus + flawlessBonus + comboBonus
+            val noHelpUsed = state.remainingHints == LevelConfig.getConfigForLevel(state.levelNumber).initialLives // or true if no booster consumed
 
             val stars = when {
                 state.errorsCount == 0 -> 3
                 state.errorsCount <= 2 -> 2
                 else -> 1
             }
+
+            // Game economy rewards:
+            // Base completion: +40
+            // 3 stars bonus: +30
+            // No help used bonus: +20
+            val baseCompletionReward = 40
+            val starsBonus = if (stars == 3) 30 else 0
+            val noHelpBonus = if (flawless) 20 else 0
+            val totalCoinsEarned = baseCompletionReward + starsBonus + noHelpBonus
 
             val totalFlipsCount = maxOf(state.totalFlips, state.totalPairs * 2)
             val accuracy = if (totalFlipsCount > 0) {
@@ -318,8 +324,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 it.copy(
                     status = GameUiStatus.LevelCompleted(
                         coinsEarned = totalCoinsEarned,
-                        flawlessBonus = flawlessBonus,
-                        comboBonus = comboBonus,
+                        flawlessBonus = noHelpBonus,
+                        comboBonus = starsBonus,
                         timeSeconds = state.elapsedTimeSeconds,
                         levelCompletedNumber = state.levelNumber,
                         errorsCount = state.errorsCount,
@@ -418,9 +424,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun useRevealPair() {
         viewModelScope.launch {
-            val player = repository.playerFlow.firstOrNull() ?: return@launch
-            if (player.coins >= 150) {
-                repository.addCoins(-150)
+            if (repository.spendCoins(50, "REVEAL_PAIR")) {
                 audioManager.playReveal()
                 val unmatched = _uiState.value.cards.filter { !it.isMatched }
                 val pair = unmatched.groupBy { it.pairId }.values.find { it.size >= 2 } ?: return@launch
@@ -435,27 +439,65 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 _uiState.update { state ->
                     state.copy(
                         cards = updatedCards,
-                        pairsFound = newPairsFound,
-                        coinsEarnedInGame = state.coinsEarnedInGame + 10
+                        pairsFound = newPairsFound
                     )
                 }
 
                 if (newPairsFound >= _uiState.value.totalPairs) {
                     onLevelSuccess()
                 }
+            } else {
+                audioManager.playMismatch()
             }
         }
     }
 
     fun freezeTimer() {
         viewModelScope.launch {
-            val player = repository.playerFlow.firstOrNull() ?: return@launch
-            if (player.coins >= 110) {
-                repository.addCoins(-110)
+            if (repository.spendCoins(100, "EXTRA_TIME")) {
                 audioManager.playFreeze()
                 _uiState.update { it.copy(isTimerFrozen = true) }
-                delay(10000)
+                delay(30000) // Freeze timer for 30s
                 _uiState.update { it.copy(isTimerFrozen = false) }
+            } else {
+                audioManager.playMismatch()
+            }
+        }
+    }
+
+    fun shuffleBoard() {
+        viewModelScope.launch {
+            if (repository.spendCoins(80, "SHUFFLE_BOARD")) {
+                audioManager.playSfx(SoundEffect.CARD_FLIP)
+                val currentCards = _uiState.value.cards
+                val unmatchedFaceDownIndices = currentCards.indices.filter { !currentCards[it].isMatched && !currentCards[it].isFaceUp }
+                if (unmatchedFaceDownIndices.size > 1) {
+                    val shuffledCardsList = currentCards.toMutableList()
+                    val cardObjectsToShuffle = unmatchedFaceDownIndices.map { currentCards[it] }.shuffled()
+                    unmatchedFaceDownIndices.forEachIndexed { i, targetIdx ->
+                        shuffledCardsList[targetIdx] = cardObjectsToShuffle[i]
+                    }
+                    _uiState.update { it.copy(cards = shuffledCardsList) }
+                }
+            } else {
+                audioManager.playMismatch()
+            }
+        }
+    }
+
+    fun secondChance() {
+        viewModelScope.launch {
+            if (repository.spendCoins(150, "SECOND_CHANCE")) {
+                audioManager.playMatch()
+                _uiState.update { state ->
+                    state.copy(
+                        lives = state.lives + 2,
+                        status = GameUiStatus.Playing
+                    )
+                }
+                startTimer()
+            } else {
+                audioManager.playMismatch()
             }
         }
     }

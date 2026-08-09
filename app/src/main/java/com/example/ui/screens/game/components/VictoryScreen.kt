@@ -438,12 +438,12 @@ fun VictoryScreen(
 
                                     Spacer(modifier = Modifier.height(8.dp))
 
-                                    RewardRowItem("Vitória da Fase", "+100 Moedas 🪙")
-                                    if (completed.flawlessBonus > 0) {
-                                        RewardRowItem("Bônus Sem Erros ⭐", "+${completed.flawlessBonus} Moedas 🪙")
-                                    }
+                                    RewardRowItem("Vitória da Fase", "+40 Moedas 🪙")
                                     if (completed.comboBonus > 0) {
-                                        RewardRowItem("Bônus de Combo 🔥", "+${completed.comboBonus} Moedas 🪙")
+                                        RewardRowItem("Bônus 3 Estrelas ⭐", "+${completed.comboBonus} Moedas 🪙")
+                                    }
+                                    if (completed.flawlessBonus > 0) {
+                                        RewardRowItem("Bônus Sem Ajuda ✨", "+${completed.flawlessBonus} Moedas 🪙")
                                     }
                                     RewardRowItem("Experiência Ganha", "+${completed.xpEarned} XP ⭐")
                                 }
@@ -669,6 +669,10 @@ fun VictoryScreen(
                                     }
                                 }
                             }
+
+                            // Banner Ad on Victory Screen
+                            Spacer(modifier = Modifier.height(16.dp))
+                            BannerAdContainer(isAdsRemoved = isAdsRemoved)
                         }
                     }
                 }

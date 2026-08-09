@@ -1,5 +1,6 @@
 package com.example.data.repository
 
+import android.util.Log
 import com.example.data.local.DataStoreManager
 import com.example.data.local.dao.MemoryQuestDao
 import com.example.data.local.entity.AchievementEntity
@@ -9,6 +10,10 @@ import com.example.data.local.entity.UnlockedThemeEntity
 import com.example.data.model.GameTheme
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 class GameRepository(
     private val dao: MemoryQuestDao,
@@ -29,14 +34,25 @@ class GameRepository(
     val isAdsRemoved: Flow<Boolean> = dataStoreManager.isAdsRemoved
     val language: Flow<String> = dataStoreManager.language
 
+    companion object {
+        val DAILY_REWARDS = listOf(50, 75, 100, 125, 150, 200, 300)
+    }
+
+    data class DailyRewardStatus(
+        val canClaim: Boolean,
+        val currentStreak: Int,
+        val nextRewardAmount: Int,
+        val isClaimedToday: Boolean
+    )
+
     suspend fun ensureInitialized() {
         val player = dao.getPlayer()
         if (player == null) {
-            // New user setup
+            // New user setup: starts with 300 coins
             val newPlayer = PlayerEntity(
                 id = 1,
                 name = "", // Empty name signals first-run onboarding!
-                coins = 100,
+                coins = 300,
                 currentLevel = 1,
                 highestLevel = 1,
                 firstGameDate = System.currentTimeMillis(),
@@ -59,7 +75,7 @@ class GameRepository(
                 totalPairsFound = 0,
                 consecutiveDays = 1,
                 totalFlawlessWins = 0,
-                totalCoinsEarned = 100,
+                totalCoinsEarned = 300,
                 totalFlips = 0,
                 correctFlips = 0
             )
@@ -94,12 +110,121 @@ class GameRepository(
         dao.insertOrUpdatePlayer(player)
     }
 
-    suspend fun addCoins(amount: Int) {
+    suspend fun addCoins(amount: Int, reason: String = "EARNED") {
+        if (amount <= 0) return
         dao.addCoins(amount)
-        // Check achievement for coins
+        val stats = dao.getStatistics()
+        if (stats != null) {
+            dao.insertOrUpdateStatistics(
+                stats.copy(totalCoinsEarned = stats.totalCoinsEarned + amount)
+            )
+        }
         val player = dao.getPlayer()
         if (player != null) {
             checkAndIncrementAchievement("ach_1000_coins", player.coins)
+        }
+        Log.d("MemoryQuestEconomy", "addCoins: +$amount ($reason)")
+    }
+
+    suspend fun spendCoins(amount: Int, reason: String = "PURCHASE"): Boolean {
+        if (amount <= 0) return true
+        val player = dao.getPlayer() ?: return false
+        if (player.coins >= amount) {
+            dao.addCoins(-amount)
+            Log.d("MemoryQuestEconomy", "spendCoins: -$amount ($reason)")
+            return true
+        }
+        Log.d("MemoryQuestEconomy", "spendCoins failed: balance ${player.coins} < $amount ($reason)")
+        return false
+    }
+
+    suspend fun getDailyRewardStatus(): DailyRewardStatus {
+        val player = dao.getPlayer() ?: return DailyRewardStatus(false, 0, 50, false)
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val todayString = dateFormat.format(Date())
+
+        val lastRewardDateString = if (player.lastDailyRewardDate > 0) {
+            dateFormat.format(Date(player.lastDailyRewardDate))
+        } else ""
+
+        if (lastRewardDateString == todayString) {
+            val currentStreak = if (player.dailyRewardStreak in 1..7) player.dailyRewardStreak else 1
+            val nextAmount = DAILY_REWARDS[(currentStreak - 1).coerceIn(0, 6)]
+            return DailyRewardStatus(
+                canClaim = false,
+                currentStreak = currentStreak,
+                nextRewardAmount = nextAmount,
+                isClaimedToday = true
+            )
+        }
+
+        val calendar = Calendar.getInstance()
+        calendar.add(Calendar.DAY_OF_YEAR, -1)
+        val yesterdayString = dateFormat.format(calendar.time)
+
+        val nextStreak = if (lastRewardDateString == yesterdayString) {
+            if (player.dailyRewardStreak >= 7) 1 else player.dailyRewardStreak + 1
+        } else {
+            1
+        }
+
+        val nextAmount = DAILY_REWARDS[(nextStreak - 1).coerceIn(0, 6)]
+        return DailyRewardStatus(
+            canClaim = true,
+            currentStreak = nextStreak,
+            nextRewardAmount = nextAmount,
+            isClaimedToday = false
+        )
+    }
+
+    suspend fun claimDailyReward(): Int? {
+        val status = getDailyRewardStatus()
+        if (!status.canClaim) return null
+
+        val player = dao.getPlayer() ?: return null
+        val updatedPlayer = player.copy(
+            lastDailyRewardDate = System.currentTimeMillis(),
+            dailyRewardStreak = status.currentStreak
+        )
+        dao.insertOrUpdatePlayer(updatedPlayer)
+        addCoins(status.nextRewardAmount, "DAILY_REWARD_DAY_${status.currentStreak}")
+        return status.nextRewardAmount
+    }
+
+    suspend fun claimRewardedAdCoins(): Boolean {
+        val player = dao.getPlayer() ?: return false
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val todayString = dateFormat.format(Date())
+
+        val (todayCount, dateToSave) = if (player.rewardedAdsDate == todayString) {
+            player.rewardedAdsToday to todayString
+        } else {
+            0 to todayString
+        }
+
+        if (todayCount >= 5) {
+            Log.w("RewardedAd", "Daily limit of 5 ads reached for today.")
+            return false
+        }
+
+        val newCount = todayCount + 1
+        val updatedPlayer = player.copy(
+            rewardedAdsToday = newCount,
+            rewardedAdsDate = dateToSave
+        )
+        dao.insertOrUpdatePlayer(updatedPlayer)
+        addCoins(100, "REWARDED_AD")
+        return true
+    }
+
+    suspend fun getRemainingRewardedAdsToday(): Int {
+        val player = dao.getPlayer() ?: return 5
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val todayString = dateFormat.format(Date())
+        return if (player.rewardedAdsDate == todayString) {
+            (5 - player.rewardedAdsToday).coerceAtLeast(0)
+        } else {
+            5
         }
     }
 
@@ -112,9 +237,7 @@ class GameRepository(
     }
 
     suspend fun unlockTheme(themeId: String, price: Int) {
-        val player = dao.getPlayer() ?: return
-        if (player.coins >= price) {
-            dao.addCoins(-price)
+        if (spendCoins(price, "UNLOCK_THEME_$themeId")) {
             dao.unlockTheme(UnlockedThemeEntity(themeId = themeId))
             dao.updateEquippedTheme(themeId)
         }
@@ -138,7 +261,6 @@ class GameRepository(
         val newTotalTime = currentStats.totalTimeSeconds + gameDurationSeconds
         val newTotalPairs = currentStats.totalPairsFound + pairsFoundInGame
         val newFlawless = currentStats.totalFlawlessWins + (if (won && flawless) 1 else 0)
-        val newTotalCoins = currentStats.totalCoinsEarned + coinsEarnedInGame
         val newStreak = maxOf(currentStats.highestStreak, maxStreakInGame)
         val newTotalFlips = currentStats.totalFlips + totalFlipsInGame
         val newCorrectFlips = currentStats.correctFlips + (pairsFoundInGame * 2)
@@ -150,7 +272,6 @@ class GameRepository(
             totalTimeSeconds = newTotalTime,
             totalPairsFound = newTotalPairs,
             totalFlawlessWins = newFlawless,
-            totalCoinsEarned = newTotalCoins,
             highestStreak = newStreak,
             totalFlips = newTotalFlips,
             correctFlips = newCorrectFlips
@@ -163,7 +284,9 @@ class GameRepository(
         if (won) {
             val nextLevel = currentPlayer.currentLevel + 1
             dao.updatePlayerLevel(nextLevel)
-            dao.addCoins(coinsEarnedInGame)
+            if (coinsEarnedInGame > 0) {
+                addCoins(coinsEarnedInGame, "LEVEL_WIN_REWARD")
+            }
 
             checkAndIncrementAchievement("ach_first_win", 1)?.let { unlockedList.add(it) }
             checkAndIncrementAchievement("ach_10_levels", nextLevel)?.let { unlockedList.add(it) }
@@ -173,7 +296,7 @@ class GameRepository(
             }
         } else {
             if (coinsEarnedInGame > 0) {
-                dao.addCoins(coinsEarnedInGame)
+                addCoins(coinsEarnedInGame, "GAME_LOSS_PARTIAL_REWARD")
             }
         }
 
@@ -201,7 +324,7 @@ class GameRepository(
                     unlockedAt = System.currentTimeMillis()
                 )
                 dao.updateAchievement(unlocked)
-                dao.addCoins(ach.rewardCoins)
+                addCoins(ach.rewardCoins, "ACHIEVEMENT_$achievementId")
                 return unlocked
             } else {
                 dao.updateAchievement(ach.copy(currentProgress = newProgress))
@@ -243,8 +366,8 @@ class GameRepository(
     suspend fun resetGameProgress() {
         val player = dao.getPlayer()
         if (player != null) {
+            // Preserve current user's coins and historical stats!
             val resetPlayer = player.copy(
-                coins = 100,
                 currentLevel = 1,
                 highestLevel = 1,
                 remainingHints = 3,
@@ -252,21 +375,21 @@ class GameRepository(
             )
             dao.insertOrUpdatePlayer(resetPlayer)
 
-            val initialStats = StatisticsEntity(
-                id = 1,
-                totalGames = 0,
-                wins = 0,
-                losses = 0,
-                totalTimeSeconds = 0,
-                highestStreak = 0,
-                totalPairsFound = 0,
-                consecutiveDays = 1,
-                totalFlawlessWins = 0,
-                totalCoinsEarned = 100,
-                totalFlips = 0,
-                correctFlips = 0
-            )
-            dao.insertOrUpdateStatistics(initialStats)
+            val currentStats = dao.getStatistics()
+            if (currentStats != null) {
+                val resetStats = currentStats.copy(
+                    totalGames = 0,
+                    wins = 0,
+                    losses = 0,
+                    totalTimeSeconds = 0,
+                    highestStreak = 0,
+                    totalPairsFound = 0,
+                    totalFlawlessWins = 0,
+                    totalFlips = 0,
+                    correctFlips = 0
+                )
+                dao.insertOrUpdateStatistics(resetStats)
+            }
         }
     }
 

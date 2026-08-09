@@ -11,6 +11,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.datasource.RawResourceDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import com.example.data.local.DataStoreManager
 import kotlinx.coroutines.CoroutineScope
@@ -23,7 +24,7 @@ import kotlinx.coroutines.launch
 class MusicManager private constructor(private val context: Context) : DefaultLifecycleObserver {
 
     companion object {
-        private const val LOG_TAG = "MemoryQuestMusic"
+        private const val LOG_TAG = "MemoryQuest_Audio"
 
         @Volatile
         private var INSTANCE: MusicManager? = null
@@ -48,7 +49,7 @@ class MusicManager private constructor(private val context: Context) : DefaultLi
     val playerInstanceCount: Int
         get() = if (exoPlayer != null) 1 else 0
 
-    var isMusicEnabled: Boolean = false
+    var isMusicEnabled: Boolean = true
         private set
     var isSettingsLoaded: Boolean = false
         private set
@@ -77,35 +78,47 @@ class MusicManager private constructor(private val context: Context) : DefaultLi
                     volume = musicVolume
                     addListener(object : Player.Listener {
                         override fun onPlayerError(error: PlaybackException) {
-                            Log.w(LOG_TAG, "Erro de reprodução no ExoPlayer para faixa $currentTrack: ${error.message}")
+                            Log.e(LOG_TAG, "Erro de reprodução no ExoPlayer para faixa $currentTrack: ${error.message}", error)
+                        }
+
+                        override fun onPlaybackStateChanged(playbackState: Int) {
+                            val stateStr = when (playbackState) {
+                                Player.STATE_IDLE -> "IDLE"
+                                Player.STATE_BUFFERING -> "BUFFERING"
+                                Player.STATE_READY -> "READY"
+                                Player.STATE_ENDED -> "ENDED"
+                                else -> "UNKNOWN($playbackState)"
+                            }
+                            Log.i(LOG_TAG, "ExoPlayer state changed to $stateStr for track $currentTrack")
                         }
                     })
                 }
-            Log.d(LOG_TAG, "ExoPlayer único inicializado com sucesso. Instâncias ativas: $playerInstanceCount")
+            Log.i(LOG_TAG, "ExoPlayer único inicializado com sucesso. Instâncias ativas: $playerInstanceCount | volume=$musicVolume")
         } catch (e: Exception) {
-            Log.e(LOG_TAG, "Falha ao inicializar ExoPlayer para música de fundo", e)
+            Log.e(LOG_TAG, "Falha ao inicializar ExoPlayer para música de fundo: ${e.message}", e)
         }
     }
 
     private fun initLifecycleObserver() {
         try {
             ProcessLifecycleOwner.get().lifecycle.addObserver(this)
+            Log.i(LOG_TAG, "Observador de ciclo de vida do processo registrado")
         } catch (e: Exception) {
-            Log.w(LOG_TAG, "Não foi possível registrar o observador de ciclo de vida do processo", e)
+            Log.w(LOG_TAG, "Não foi possível registrar o observador de ciclo de vida do processo: ${e.message}", e)
         }
     }
 
     override fun onStart(owner: LifecycleOwner) {
         super.onStart(owner)
         isAppInForeground = true
-        Log.d(LOG_TAG, "Lifecycle: Foreground | Current route: ${currentTrack?.name ?: "NONE"} | Action: RESUME | Player instances: $playerInstanceCount")
+        Log.i(LOG_TAG, "Lifecycle: Foreground | Track: ${currentTrack?.name ?: "NONE"} | Resuming music | isMusicEnabled=$isMusicEnabled")
         resumeMusic()
     }
 
     override fun onStop(owner: LifecycleOwner) {
         super.onStop(owner)
         isAppInForeground = false
-        Log.d(LOG_TAG, "Lifecycle: Background | Current route: ${currentTrack?.name ?: "NONE"} | Action: PAUSE | Player instances: $playerInstanceCount")
+        Log.i(LOG_TAG, "Lifecycle: Background | Track: ${currentTrack?.name ?: "NONE"} | Pausing music")
         pauseMusic()
     }
 
@@ -118,24 +131,18 @@ class MusicManager private constructor(private val context: Context) : DefaultLi
                     isSettingsLoaded = true
                     isMusicEnabled = enabled
 
-                    Log.d(
+                    Log.i(
                         LOG_TAG,
-                        "Settings loaded | musicEnabled=$enabled (was $prevEnabled, wasLoaded=$prevLoaded) | Current route: ${currentTrack?.name ?: "NONE"}"
+                        "Settings loaded: musicEnabled=$enabled (was $prevEnabled, wasLoaded=$prevLoaded) | currentTrack=${currentTrack?.name ?: "NONE"}"
                     )
 
                     if (!enabled) {
-                        Log.d(
-                            LOG_TAG,
-                            "stop() | Setting changed: musicEnabled=false | Current route: ${currentTrack?.name ?: "NONE"}"
-                        )
+                        Log.i(LOG_TAG, "Música desativada nas configurações -> Parando reprodução")
                         stopMusic()
                     } else {
                         if (!prevLoaded || !prevEnabled) {
                             if (currentTrack != null && isAppInForeground) {
-                                Log.d(
-                                    LOG_TAG,
-                                    "play() | Setting changed/loaded: musicEnabled=true | Current route: ${currentTrack?.name ?: "NONE"}"
-                                )
+                                Log.i(LOG_TAG, "Música ativada nas configurações -> Iniciando $currentTrack")
                                 playTrack(currentTrack!!)
                             }
                         }
@@ -145,6 +152,7 @@ class MusicManager private constructor(private val context: Context) : DefaultLi
             launch {
                 dataStoreManager.musicVolume.collectLatest { vol ->
                     musicVolume = vol
+                    Log.i(LOG_TAG, "Settings loaded: musicVolume=$musicVolume")
                     if (fadeJob?.isActive != true) {
                         exoPlayer?.volume = vol
                     }
@@ -154,29 +162,29 @@ class MusicManager private constructor(private val context: Context) : DefaultLi
     }
 
     fun playTrack(track: MusicTrack) {
-        val player = exoPlayer ?: return
+        val player = exoPlayer ?: run {
+            Log.e(LOG_TAG, "playTrack() cancelado: ExoPlayer e nulo")
+            return
+        }
         val prevTrack = currentTrack
         currentTrack = track
 
-        Log.d(
+        Log.i(
             LOG_TAG,
-            "play() requested for track ${track.name} | Current route: ${track.name} | isSettingsLoaded=$isSettingsLoaded | musicEnabled=$isMusicEnabled | isAppInForeground=$isAppInForeground"
+            "playTrack() solicitado: ${track.name} | isMusicEnabled=$isMusicEnabled | isAppInForeground=$isAppInForeground | musicVolume=$musicVolume"
         )
 
-        if (!isSettingsLoaded || !isMusicEnabled || !isAppInForeground) {
-            Log.d(
+        if (!isMusicEnabled || !isAppInForeground) {
+            Log.i(
                 LOG_TAG,
-                "stop() | play() blocked for track ${track.name}: isSettingsLoaded=$isSettingsLoaded, musicEnabled=$isMusicEnabled, isAppInForeground=$isAppInForeground"
+                "playTrack() bloqueado: isMusicEnabled=$isMusicEnabled, isAppInForeground=$isAppInForeground"
             )
             stopMusic()
             return
         }
 
-        if (prevTrack == track && (player.isPlaying || player.playbackState == Player.STATE_BUFFERING || player.playbackState == Player.STATE_READY)) {
-            Log.d(
-                LOG_TAG,
-                "Current route: ${track.name} | Requested track: ${track.name} | Action: KEEP | Player instances: $playerInstanceCount"
-            )
+        if (prevTrack == track && player.isPlaying && player.mediaItemCount > 0) {
+            Log.i(LOG_TAG, "Faixa $track ja esta tocando. Mantendo reproducao.")
             return
         }
 
@@ -202,26 +210,19 @@ class MusicManager private constructor(private val context: Context) : DefaultLi
         }
 
         if (foundResId == 0) {
-            Log.w(
-                LOG_TAG,
-                "stop() | Current route: ${track.name} | Resource for ${track.name} not found"
-            )
+            Log.e(LOG_TAG, "Recurso de audio para a faixa ${track.name} nao encontrado em res/raw")
             stopMusic()
             return
         }
 
-        val actionName = if (prevTrack == null) "PLAY" else "SWITCH"
-        Log.d(
-            LOG_TAG,
-            "play() | Current route: ${track.name} | Previous track: ${prevTrack?.name ?: "NONE"} -> ${track.name} ($loadedName) | Player instances: $playerInstanceCount"
-        )
+        Log.i(LOG_TAG, "Carregando faixa ${track.name} (raw/$loadedName, resId=$foundResId)...")
 
         fadeJob?.cancel()
         fadeJob = mainScope.launch {
             if (player.isPlaying) {
                 val startVol = player.volume
-                val steps = 10
-                val delayMs = 20L
+                val steps = 8
+                val delayMs = 15L
                 for (i in steps downTo 0) {
                     player.volume = startVol * (i / steps.toFloat())
                     delay(delayMs)
@@ -232,8 +233,8 @@ class MusicManager private constructor(private val context: Context) : DefaultLi
                 player.stop()
                 player.clearMediaItems()
 
-                val uri = "android.resource://${context.packageName}/$foundResId"
-                val mediaItem = MediaItem.fromUri(uri)
+                val rawUri = RawResourceDataSource.buildRawResourceUri(foundResId)
+                val mediaItem = MediaItem.fromUri(rawUri)
 
                 val isLooping = (track != MusicTrack.VICTORY && track != MusicTrack.DEFEAT)
                 player.repeatMode = if (isLooping) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
@@ -243,6 +244,8 @@ class MusicManager private constructor(private val context: Context) : DefaultLi
                 player.volume = 0f
                 player.play()
 
+                Log.i(LOG_TAG, "Playback iniciado para faixa ${track.name} (raw/$loadedName, looping=$isLooping)")
+
                 val steps = 10
                 val delayMs = 20L
                 val targetVol = musicVolume
@@ -251,8 +254,9 @@ class MusicManager private constructor(private val context: Context) : DefaultLi
                     delay(delayMs)
                 }
                 player.volume = targetVol
+                Log.i(LOG_TAG, "Volume da musica ajustado para $targetVol para a faixa ${track.name}")
             } catch (e: Exception) {
-                Log.e(LOG_TAG, "Erro ao carregar/tocar faixa de música ${track.name} (recurso $loadedName)", e)
+                Log.e(LOG_TAG, "ERROR loading/playing music track ${track.name} (raw/$loadedName): ${e.message}", e)
             }
         }
     }
@@ -260,22 +264,21 @@ class MusicManager private constructor(private val context: Context) : DefaultLi
     fun pauseMusic() {
         fadeJob?.cancel()
         try {
-            Log.d(LOG_TAG, "pause() called | Current route: ${currentTrack?.name ?: "NONE"}")
+            Log.i(LOG_TAG, "pauseMusic() executado | Track: ${currentTrack?.name ?: "NONE"}")
             if (exoPlayer?.isPlaying == true) {
                 exoPlayer?.pause()
             }
         } catch (e: Exception) {
-            Log.e(LOG_TAG, "Erro ao pausar música no ExoPlayer", e)
+            Log.e(LOG_TAG, "ERROR ao pausar musica no ExoPlayer: ${e.message}", e)
         }
     }
 
     fun resumeMusic() {
-        Log.d(
+        Log.i(
             LOG_TAG,
-            "resume() requested | Current route: ${currentTrack?.name ?: "NONE"} | isSettingsLoaded=$isSettingsLoaded | musicEnabled=$isMusicEnabled | isAppInForeground=$isAppInForeground"
+            "resumeMusic() | Track: ${currentTrack?.name ?: "NONE"} | isMusicEnabled=$isMusicEnabled | isAppInForeground=$isAppInForeground"
         )
-        if (!isSettingsLoaded || !isMusicEnabled || !isAppInForeground) {
-            Log.d(LOG_TAG, "stop() | resume() blocked because music is disabled or settings not loaded")
+        if (!isMusicEnabled || !isAppInForeground) {
             stopMusic()
             return
         }
@@ -283,36 +286,37 @@ class MusicManager private constructor(private val context: Context) : DefaultLi
 
         try {
             if (player.playbackState == Player.STATE_READY && !player.isPlaying) {
-                Log.d(LOG_TAG, "resume() | Resuming ExoPlayer playback for ${currentTrack?.name ?: "NONE"}")
+                Log.i(LOG_TAG, "Retomando reproducao do ExoPlayer para ${currentTrack?.name ?: "NONE"}")
                 player.volume = musicVolume
                 player.play()
             } else if (currentTrack != null) {
                 playTrack(currentTrack!!)
             }
         } catch (e: Exception) {
-            Log.e(LOG_TAG, "Erro ao retomar música no ExoPlayer", e)
+            Log.e(LOG_TAG, "ERROR ao retomar musica no ExoPlayer: ${e.message}", e)
         }
     }
 
     fun stopMusic() {
         fadeJob?.cancel()
         try {
-            Log.d(LOG_TAG, "stop() called | Current route: ${currentTrack?.name ?: "NONE"} | Player instances: $playerInstanceCount")
+            Log.i(LOG_TAG, "stopMusic() executado | Track: ${currentTrack?.name ?: "NONE"}")
             exoPlayer?.stop()
             exoPlayer?.clearMediaItems()
         } catch (e: Exception) {
-            Log.e(LOG_TAG, "Erro ao parar música no ExoPlayer", e)
+            Log.e(LOG_TAG, "ERROR ao parar musica no ExoPlayer: ${e.message}", e)
         }
     }
 
     fun release() {
         fadeJob?.cancel()
         try {
-            Log.d(LOG_TAG, "Action: RELEASE | Player instances: 0")
+            Log.i(LOG_TAG, "MusicManager release() executado")
             exoPlayer?.release()
             exoPlayer = null
         } catch (e: Exception) {
-            Log.e(LOG_TAG, "Erro ao liberar ExoPlayer", e)
+            Log.e(LOG_TAG, "ERROR ao liberar ExoPlayer: ${e.message}", e)
         }
     }
 }
+

@@ -178,6 +178,7 @@ fun MemoryQuestNavGraph(
         startDestination = Screen.Home.route
     ) {
         composable(Screen.Home.route) {
+            val activity = context as? android.app.Activity
             HomeScreen(
                 player = player,
                 onPlayClick = {
@@ -213,6 +214,24 @@ fun MemoryQuestNavGraph(
                 onAchievementsClick = {
                     mainViewModel.audioManager.playButton()
                     navController.navigate(Screen.Achievements.route)
+                },
+                onClaimDailyReward = {
+                    mainViewModel.claimDailyReward { reward ->
+                        if (reward != null) {
+                            Toast.makeText(context, "Recompensa Diária Coletada! +$reward 🪙", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "Você já coletou a recompensa de hoje!", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                },
+                onWatchRewardedAd = {
+                    if (activity != null) {
+                        mainViewModel.showRewardedAd(activity) { success, msg ->
+                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        Toast.makeText(context, "Atividade indisponível para carregar vídeo.", Toast.LENGTH_SHORT).show()
+                    }
                 },
                 isAdsRemoved = isAdsRemoved
             )
@@ -283,11 +302,13 @@ fun MemoryQuestNavGraph(
                     navController.popBackStack(Screen.Home.route, false)
                 },
                 onAppBackgrounded = { gameViewModel.onAppBackgrounded() },
+                onCheckInAppReview = { act -> mainViewModel.checkAndTriggerInAppReviewIfEligible(act) },
                 isAdsRemoved = isAdsRemoved
             )
         }
 
         composable(Screen.Shop.route) {
+            val activity = context as? android.app.Activity
             ShopScreen(
                 player = player,
                 unlockedThemes = unlockedThemes,
@@ -295,6 +316,15 @@ fun MemoryQuestNavGraph(
                 onSelectTheme = { themeId -> mainViewModel.selectTheme(themeId) },
                 onBuyFrame = { frame -> mainViewModel.buyFrame(frame) },
                 onBuyBooster = { id, price -> mainViewModel.buyBooster(id, price) },
+                onWatchRewardedAd = {
+                    if (activity != null) {
+                        mainViewModel.showRewardedAd(activity) { success, msg ->
+                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        Toast.makeText(context, "Atividade indisponível para carregar vídeo.", Toast.LENGTH_SHORT).show()
+                    }
+                },
                 onBackClick = { navController.popBackStack() },
                 isAdsRemoved = isAdsRemoved
             )

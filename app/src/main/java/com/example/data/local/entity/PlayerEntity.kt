@@ -7,7 +7,7 @@ import androidx.room.PrimaryKey
 data class PlayerEntity(
     @PrimaryKey val id: Int = 1,
     val name: String = "",
-    val coins: Int = 100,
+    val coins: Int = 300,
     val currentLevel: Int = 1,
     val highestLevel: Int = 1,
     val firstGameDate: Long = System.currentTimeMillis(),
@@ -24,7 +24,11 @@ data class PlayerEntity(
     val avatarType: String = "PRESET",
     val avatarPresetId: String = "avatar_01",
     val avatarLocalPath: String = "",
-    val avatarUpdatedAt: Long = System.currentTimeMillis()
+    val avatarUpdatedAt: Long = System.currentTimeMillis(),
+    val lastDailyRewardDate: Long = 0L,
+    val dailyRewardStreak: Int = 0,
+    val rewardedAdsToday: Int = 0,
+    val rewardedAdsDate: String = ""
 ) {
     val bonusLives: Int get() = extraLives
     val defaultLives: Int get() = 3

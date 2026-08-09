@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -53,6 +54,7 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -102,11 +104,19 @@ fun GameScreen(
     onGoToShop: () -> Unit,
     onBackToHome: () -> Unit,
     onAppBackgrounded: () -> Unit = {},
+    onCheckInAppReview: (Activity) -> Unit = {},
     isAdsRemoved: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
+
+    // Trigger In-App Review check on positive moment (Victory / Level Completed)
+    LaunchedEffect(state.status) {
+        if (state.status is GameUiStatus.LevelCompleted && activity != null) {
+            onCheckInAppReview(activity)
+        }
+    }
 
     // 1. Protection against screenshots and screen recording (FLAG_SECURE)
     DisposableEffect(activity) {
@@ -135,7 +145,11 @@ fun GameScreen(
     Scaffold(
         containerColor = ImmersiveBg,
         bottomBar = {
-            Column {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF160D2E))
+            ) {
                 // In-game Boosters Toolbar
                 Surface(
                     color = Color(0xFF160D2E),
@@ -145,7 +159,7 @@ fun GameScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
                         horizontalArrangement = Arrangement.SpaceAround,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -180,6 +194,9 @@ fun GameScreen(
                         )
                     }
                 }
+
+                // In-game Banner Ad
+                BannerAdContainer(isAdsRemoved = isAdsRemoved)
             }
         },
         modifier = modifier.fillMaxSize()
@@ -396,17 +413,30 @@ fun GameScreen(
                                 onClick = onRestartLevel,
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE63946)),
                                 shape = RoundedCornerShape(16.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(50.dp)
+                                    .heightIn(min = 56.dp)
                                     .testTag("try_again_button")
                             ) {
-                                Icon(imageVector = Icons.Default.Refresh, contentDescription = null)
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "TENTAR NOVAMENTE 🔄",
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "TENTAR NOVAMENTE",
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
 
                             Spacer(modifier = Modifier.height(8.dp))
@@ -435,6 +465,10 @@ fun GameScreen(
                                     Text("Menu", color = Color.White)
                                 }
                             }
+
+                            // Banner Ad on Defeat Screen
+                            Spacer(modifier = Modifier.height(16.dp))
+                            BannerAdContainer(isAdsRemoved = isAdsRemoved)
                         }
                     }
                 }

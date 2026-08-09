@@ -156,6 +156,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     )
 
     init {
+        viewModelScope.launch {
+            dataStore.recordFirstAppUseDateIfAbsent()
+        }
         audioManager.observeSettings(dataStore, viewModelScope)
 
         val context = getApplication<Application>()
@@ -500,9 +503,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun buyFrame(frameItem: ShopItem) {
         viewModelScope.launch {
-            val player = playerState.value ?: return@launch
-            if (player.coins >= frameItem.price) {
-                repository.addCoins(-frameItem.price)
+            if (repository.spendCoins(frameItem.price, "BUY_FRAME_${frameItem.id}")) {
                 repository.updateEquippedFrame(frameItem.id)
                 audioManager.playCoin()
             } else {
@@ -513,9 +514,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun buyBooster(boosterId: String, price: Int) {
         viewModelScope.launch {
-            val player = playerState.value ?: return@launch
-            if (player.coins >= price) {
-                repository.addCoins(-price)
+            if (repository.spendCoins(price, "BUY_BOOSTER_$boosterId")) {
                 when (boosterId) {
                     "booster_life" -> repository.addExtraLives(3)
                     "booster_hint" -> repository.addHints(3)
@@ -526,6 +525,44 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 audioManager.playMismatch()
             }
         }
+    }
+
+    fun claimDailyReward(onResult: (Int?) -> Unit = {}) {
+        viewModelScope.launch {
+            val rewardAmount = repository.claimDailyReward()
+            if (rewardAmount != null) {
+                audioManager.playCoin()
+            }
+            onResult(rewardAmount)
+        }
+    }
+
+    fun showRewardedAd(activity: android.app.Activity, onResult: (Boolean, String) -> Unit) {
+        val rewardedManager = com.example.config.RewardedManager(activity)
+        rewardedManager.loadAd(
+            onAdLoaded = {
+                rewardedManager.show(
+                    activity = activity,
+                    onUserEarnedReward = { _, _ ->
+                        viewModelScope.launch {
+                            val success = repository.claimRewardedAdCoins()
+                            if (success) {
+                                audioManager.playCoin()
+                                onResult(true, "Você ganhou 100 moedas!")
+                            } else {
+                                onResult(false, "Limite diário de 5 vídeos atingido.")
+                            }
+                        }
+                    },
+                    onAdDismissed = {
+                        // Ad dismissed
+                    }
+                )
+            },
+            onAdFailed = {
+                onResult(false, "Vídeo não disponível no momento. Tente novamente em instantes.")
+            }
+        )
     }
 
     fun setSoundEnabled(enabled: Boolean) {
@@ -589,6 +626,44 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _lastLeaderboardFetchTime.value = 0L
         _usernameUiState.value = UsernameUiState()
         _usernameEligibility.value = UsernameChangeEligibility.Allowed
+    }
+
+    fun checkAndTriggerInAppReviewIfEligible(activity: android.app.Activity) {
+        viewModelScope.launch {
+            dataStore.recordFirstAppUseDateIfAbsent()
+            val firstUseDate = dataStore.firstAppUseDate.firstOrNull() ?: 0L
+            val attempted = dataStore.reviewRequestAttempted.firstOrNull() ?: false
+            if (attempted) {
+                Log.d("InAppReview", "Tentativa de review já realizada anteriormente.")
+                return@launch
+            }
+
+            val currentTime = System.currentTimeMillis()
+            val fiveDaysMs = 5L * 24L * 60L * 60L * 1000L
+            val is5DaysPassed = (firstUseDate > 0L) && (currentTime - firstUseDate >= fiveDaysMs)
+
+            if (!is5DaysPassed) {
+                Log.d("InAppReview", "Elegibilidade de review: menos de 5 dias desde o primeiro uso.")
+                return@launch
+            }
+
+            val stats = statsState.value ?: repository.getStatistics()
+            val wins = stats?.wins ?: 0
+            val totalGames = stats?.totalGames ?: 0
+
+            // Exige pelo menos 5 fases concluídas/jogadas
+            if (wins < 5 && totalGames < 5) {
+                Log.d("InAppReview", "Elegibilidade de review: menos de 5 partidas/fases concluídas (wins=$wins, totalGames=$totalGames).")
+                return@launch
+            }
+
+            // Registra a tentativa antes de chamar a API da Play Store
+            dataStore.recordReviewAttempt(currentTime)
+            Log.i("InAppReview", "Condições atendidas. Solicitando In-App Review à Google Play.")
+
+            // Invoca a API oficial In-App Review
+            com.example.review.InAppReviewManager.requestInAppReview(activity)
+        }
     }
 
     override fun onCleared() {
