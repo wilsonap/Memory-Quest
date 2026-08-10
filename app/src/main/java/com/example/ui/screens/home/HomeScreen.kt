@@ -113,7 +113,7 @@ fun HomeScreen(
     Scaffold(
         containerColor = ImmersiveBg,
         bottomBar = {
-            BannerAdContainer(isAdsRemoved = isAdsRemoved)
+            BannerAdContainer(screenName = "Home", isAdsRemoved = isAdsRemoved)
         },
         modifier = modifier.fillMaxSize()
     ) { innerPadding ->

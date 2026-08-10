@@ -27,12 +27,11 @@ data class LevelConfig(
             }
 
             val columns = when {
-                cardCount <= 4 -> 2
                 cardCount <= 10 -> 2
-                cardCount <= 16 -> 4
-                cardCount <= 24 -> 4
+                cardCount <= 32 -> 4
                 cardCount <= 40 -> 5
-                else -> 6
+                cardCount <= 48 -> 6
+                else -> 8
             }
 
             val previewTime = when {

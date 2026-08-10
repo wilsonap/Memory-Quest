@@ -61,7 +61,7 @@ fun AchievementsScreen(
     Scaffold(
         containerColor = Color.Transparent,
         bottomBar = {
-            BannerAdContainer(isAdsRemoved = isAdsRemoved)
+            BannerAdContainer(screenName = "Achievements", isAdsRemoved = isAdsRemoved)
         },
         modifier = modifier
             .fillMaxSize()

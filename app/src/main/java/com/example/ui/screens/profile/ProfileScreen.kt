@@ -150,7 +150,7 @@ fun ProfileScreen(
     Scaffold(
         containerColor = ImmersiveBg,
         bottomBar = {
-            BannerAdContainer(isAdsRemoved = isAdsRemoved)
+            BannerAdContainer(screenName = "Profile", isAdsRemoved = isAdsRemoved)
         },
         modifier = modifier.fillMaxSize()
     ) { innerPadding ->

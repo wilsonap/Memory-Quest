@@ -102,7 +102,7 @@ fun ShopScreen(
     Scaffold(
         containerColor = Color.Transparent,
         bottomBar = {
-            BannerAdContainer(isAdsRemoved = isAdsRemoved)
+            BannerAdContainer(screenName = "Shop", isAdsRemoved = isAdsRemoved)
         },
         modifier = modifier
             .fillMaxSize()

@@ -131,7 +131,7 @@ fun RankingScreen(
     Scaffold(
         containerColor = ImmersiveBg,
         bottomBar = {
-            BannerAdContainer(isAdsRemoved = isAdsRemoved)
+            BannerAdContainer(screenName = "Ranking", isAdsRemoved = isAdsRemoved)
         },
         modifier = modifier.fillMaxSize()
     ) { innerPadding ->

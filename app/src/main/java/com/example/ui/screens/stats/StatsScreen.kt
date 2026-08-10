@@ -62,7 +62,7 @@ fun StatsScreen(
     Scaffold(
         containerColor = ImmersiveBg,
         bottomBar = {
-            BannerAdContainer(isAdsRemoved = isAdsRemoved)
+            BannerAdContainer(screenName = "Stats", isAdsRemoved = isAdsRemoved)
         },
         modifier = modifier.fillMaxSize()
     ) { innerPadding ->

@@ -6,13 +6,10 @@ import android.util.Log
 import android.view.WindowManager
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -20,20 +17,24 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.example.BuildConfig
 import com.example.config.AdMobConfig
 import com.example.config.BannerManager
 import com.example.sync.ConnectivityObserver
 import com.google.android.gms.ads.AdSize
 
-private const val TAG = "MemoryQuestAds"
+private const val TAG = "MemoryQuest_AdMob"
 
 /**
  * Componente reutilizável e padronizado para exibição de banners de anúncio em todo o aplicativo.
@@ -41,8 +42,10 @@ private const val TAG = "MemoryQuestAds"
  */
 @Composable
 fun BannerAdContainer(
+    screenName: String = "Unknown",
     isAdsRemoved: Boolean = false,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onAdLoadedChanged: (Boolean) -> Unit = {}
 ) {
     val adUnitId = AdMobConfig.bannerId
 
@@ -51,22 +54,56 @@ fun BannerAdContainer(
     }
 
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val coroutineScope = rememberCoroutineScope()
     var isAdLoaded by remember { mutableStateOf(false) }
-    var adFailedToLoad by remember { mutableStateOf(false) }
-    var bannerManagerRef by remember { mutableStateOf<BannerManager?>(null) }
 
     val adaptiveAdSize = remember(context) { getAdaptiveAdSize(context) }
-    val bannerHeightDp = remember(adaptiveAdSize, adFailedToLoad) {
-        if (adFailedToLoad) 0 else adaptiveAdSize.getHeight().coerceAtLeast(50)
+    val bannerHeightDp = remember(adaptiveAdSize) {
+        adaptiveAdSize.getHeight().coerceAtLeast(50)
     }
 
-    // Re-tentar carregar ao reconectar à internet se falhou previamente
-    DisposableEffect(context) {
+    val bannerManager = remember(screenName, adUnitId) {
+        BannerManager(
+            context = context,
+            adUnitId = adUnitId,
+            screenName = screenName,
+            coroutineScope = coroutineScope,
+            onAdLoadedStateChange = { loaded ->
+                isAdLoaded = loaded
+                onAdLoadedChanged(loaded)
+            }
+        )
+    }
+
+    // Gerenciamento de ciclo de vida do Banner (pause/resume/destroy ao sair da tela)
+    DisposableEffect(bannerManager, lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_PAUSE -> {
+                    bannerManager.pause()
+                }
+                Lifecycle.Event.ON_RESUME -> {
+                    bannerManager.resume()
+                }
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+
+        onDispose {
+            Log.d(TAG, "Screen=$screenName onDispose")
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            bannerManager.destroy()
+        }
+    }
+
+    // Re-tentar carregar ao reconectar à internet
+    DisposableEffect(context, bannerManager) {
         val observer = ConnectivityObserver(context) {
             if (!isAdLoaded) {
-                Log.d(TAG, "Conexão restabelecida. Tentando recarregar banner AdMob...")
-                adFailedToLoad = false
-                bannerManagerRef?.loadAd()
+                Log.d(TAG, "Screen=$screenName conexão restabelecida, tentando recarregar banner...")
+                bannerManager.loadAd()
             }
         }
         observer.startListening()
@@ -74,10 +111,6 @@ fun BannerAdContainer(
         onDispose {
             observer.stopListening()
         }
-    }
-
-    if (adFailedToLoad) {
-        return
     }
 
     Surface(
@@ -96,26 +129,10 @@ fun BannerAdContainer(
             AndroidView(
                 modifier = Modifier.fillMaxWidth(),
                 factory = { ctx ->
-                    val manager = BannerManager(
-                        context = ctx,
-                        adUnitId = adUnitId,
-                        onAdLoadedStateChange = { loaded ->
-                            isAdLoaded = loaded
-                            adFailedToLoad = !loaded
-                        }
-                    )
-                    bannerManagerRef = manager
-                    manager.createAdView(adaptiveAdSize)
+                    bannerManager.createAdView(adaptiveAdSize)
                 },
                 update = { /* sem recomposições desnecessárias */ }
             )
-        }
-    }
-
-    DisposableEffect(adUnitId) {
-        onDispose {
-            bannerManagerRef?.destroy()
-            bannerManagerRef = null
         }
     }
 }
@@ -125,10 +142,12 @@ fun BannerAdContainer(
  */
 @Composable
 fun BannerAd(
+    screenName: String = "Unknown",
     isPremium: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     BannerAdContainer(
+        screenName = screenName,
         isAdsRemoved = isPremium,
         modifier = modifier
     )
@@ -139,10 +158,12 @@ fun BannerAd(
  */
 @Composable
 fun BannerAdView(
+    screenName: String = "Unknown",
     isAdsRemoved: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     BannerAdContainer(
+        screenName = screenName,
         isAdsRemoved = isAdsRemoved,
         modifier = modifier
     )
@@ -168,3 +189,4 @@ private fun getAdaptiveAdSize(context: Context): AdSize {
         AdSize.BANNER
     }
 }
+

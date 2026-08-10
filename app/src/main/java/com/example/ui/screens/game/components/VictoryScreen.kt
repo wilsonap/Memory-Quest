@@ -672,7 +672,7 @@ fun VictoryScreen(
 
                             // Banner Ad on Victory Screen
                             Spacer(modifier = Modifier.height(16.dp))
-                            BannerAdContainer(isAdsRemoved = isAdsRemoved)
+                            BannerAdContainer(screenName = "Game_Victory", isAdsRemoved = isAdsRemoved)
                         }
                     }
                 }

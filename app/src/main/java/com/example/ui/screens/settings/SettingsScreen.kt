@@ -321,7 +321,7 @@ fun SettingsScreen(
         containerColor = Color.Transparent,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
-            BannerAdContainer(isAdsRemoved = isAdsRemoved)
+            BannerAdContainer(screenName = "Settings", isAdsRemoved = isAdsRemoved)
         },
         modifier = Modifier
             .fillMaxSize()
