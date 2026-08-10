@@ -28,8 +28,10 @@ data class LevelConfig(
 
             val columns = when {
                 cardCount <= 10 -> 2
-                cardCount <= 32 -> 4
-                cardCount <= 40 -> 5
+                cardCount <= 16 -> 4
+                cardCount <= 24 -> 6
+                cardCount <= 32 -> 6
+                cardCount <= 40 -> 6
                 cardCount <= 48 -> 6
                 else -> 8
             }

@@ -313,7 +313,7 @@ fun GameScreen(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     val availW = maxWidth
@@ -339,9 +339,9 @@ fun GameScreen(
                     SideEffect {
                         Log.d(
                             "MemoryQuest_Layout",
-                            "phase=$phaseStr, cards=${state.cards.size}, columns=${gridLayout.cols}, rows=${gridLayout.rows}, " +
-                            "availableWidth=$availW, availableHeight=$availH, cardSize=${gridLayout.cardWidth}x${gridLayout.cardHeight}, " +
-                            "gridHeight=${gridLayout.totalGridHeight}, isBannerLoaded=$isAdLoaded"
+                            "phase=$phaseStr cards=${state.cards.size} columns=${gridLayout.cols} rows=${gridLayout.rows} " +
+                            "availableWidth=$availW availableHeight=$availH cardSize=${gridLayout.cardWidth}x${gridLayout.cardHeight} " +
+                            "gridHeight=${gridLayout.totalGridHeight}"
                         )
                     }
 
@@ -593,54 +593,91 @@ private fun calculateOptimalGrid(
     availableWidth: Dp,
     availableHeight: Dp
 ): GridLayoutInfo {
-    val cols = maxOf(1, targetCols)
-    val rows = maxOf(1, (cardCount + cols - 1) / cols)
-
     if (cardCount <= 0 || availableWidth <= 0.dp || availableHeight <= 0.dp) {
+        val cols = maxOf(1, targetCols)
+        val rows = maxOf(1, (cardCount + cols - 1) / cols)
         return GridLayoutInfo(cols, rows, 80.dp, 100.dp, 8.dp, 168.dp, 208.dp)
     }
 
-    val spacing = when {
-        cardCount <= 8 -> 8.dp
-        cardCount <= 16 -> 6.dp
-        cardCount <= 32 -> 4.dp
-        else -> 2.5.dp
+    val candidates = when {
+        cardCount <= 4 -> listOf(2)
+        cardCount <= 6 -> listOf(2, 3)
+        cardCount <= 8 -> listOf(2, 3, 4)
+        cardCount <= 10 -> listOf(2, 3, 4)
+        cardCount <= 12 -> listOf(3, 4)
+        cardCount <= 16 -> listOf(3, 4, 5)
+        cardCount <= 20 -> listOf(4, 5)
+        cardCount <= 24 -> listOf(4, 5, 6)
+        cardCount <= 32 -> listOf(5, 6, 7)
+        cardCount <= 40 -> listOf(5, 6, 7, 8)
+        cardCount <= 48 -> listOf(6, 7, 8)
+        else -> listOf(7, 8)
     }
-
-    val totalHorizSpacing = spacing * (cols - 1)
-    val totalVertSpacing = spacing * (rows - 1)
-
-    val availWForCards = maxOf(0.dp, availableWidth - totalHorizSpacing)
-    val availHForCards = maxOf(0.dp, availableHeight - totalVertSpacing)
-
-    val maxWPerCard = availWForCards / cols
-    val maxHPerCard = availHForCards / rows
 
     val targetRatio = 0.74f
 
-    var cW = maxWPerCard
-    var cH = cW / targetRatio
+    var bestResult: GridLayoutInfo? = null
+    var maxCardAreaScore = -1f
 
-    if (cH > maxHPerCard) {
-        cH = maxHPerCard
-        cW = cH * targetRatio
+    for (cols in candidates) {
+        val rows = (cardCount + cols - 1) / cols
+
+        val spacing = when {
+            cardCount <= 8 -> 6.dp
+            cardCount <= 16 -> 5.dp
+            cardCount <= 32 -> 3.5.dp
+            else -> 2.5.dp
+        }
+
+        val totalHorizSpacing = spacing * (cols - 1)
+        val totalVertSpacing = spacing * (rows - 1)
+
+        val availWForCards = maxOf(0.dp, availableWidth - totalHorizSpacing)
+        val availHForCards = maxOf(0.dp, availableHeight - totalVertSpacing)
+
+        val maxWPerCard = availWForCards / cols
+        val maxHPerCard = availHForCards / rows
+
+        var cW = maxWPerCard
+        var cH = cW / targetRatio
+
+        if (cH > maxHPerCard) {
+            cH = maxHPerCard
+            cW = cH * targetRatio
+        }
+
+        if (cW > maxWPerCard) {
+            cW = maxWPerCard
+            cH = cW / targetRatio
+        }
+
+        val area = cW.value * cH.value
+        val unusedSlots = (cols * rows) - cardCount
+        val score = area * (1f - unusedSlots * 0.012f)
+
+        if (score > maxCardAreaScore || bestResult == null) {
+            maxCardAreaScore = score
+            val totalW = (cW * cols) + (spacing * (cols - 1))
+            val totalH = (cH * rows) + (spacing * (rows - 1))
+            bestResult = GridLayoutInfo(
+                cols = cols,
+                rows = rows,
+                cardWidth = cW,
+                cardHeight = cH,
+                spacing = spacing,
+                totalGridWidth = totalW,
+                totalGridHeight = totalH
+            )
+        }
     }
 
-    if (cW > maxWPerCard) {
-        cW = maxWPerCard
-        cH = cW / targetRatio
-    }
-
-    val totalW = (cW * cols) + (spacing * (cols - 1))
-    val totalH = (cH * rows) + (spacing * (rows - 1))
-
-    return GridLayoutInfo(
-        cols = cols,
-        rows = rows,
-        cardWidth = cW,
-        cardHeight = cH,
-        spacing = spacing,
-        totalGridWidth = totalW,
-        totalGridHeight = totalH
+    return bestResult ?: GridLayoutInfo(
+        cols = targetCols,
+        rows = (cardCount + targetCols - 1) / targetCols,
+        cardWidth = 80.dp,
+        cardHeight = 100.dp,
+        spacing = 8.dp,
+        totalGridWidth = 168.dp,
+        totalGridHeight = 208.dp
     )
 }
