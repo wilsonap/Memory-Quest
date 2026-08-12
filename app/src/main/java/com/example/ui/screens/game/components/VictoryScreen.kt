@@ -571,7 +571,7 @@ fun VictoryScreen(
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // 7. BANNER ADMOB & BOTÕES DE AÇÃO (Banner posicionado estritamente ANTES dos botões)
+                        // 7. BOTÕES DE AÇÃO & BANNER ADMOB (Banner posicionado estritamente ABAIXO dos botões)
                         AnimatedVisibility(
                             visible = buttonsVisible,
                             enter = fadeIn(tween(400)) + slideInVertically { 30 }
@@ -580,16 +580,7 @@ fun VictoryScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                // Banner AdMob com área própria e reservada
-                                BannerAdContainer(
-                                    screenName = "Game_Victory",
-                                    isAdsRemoved = isAdsRemoved,
-                                    modifier = Modifier.padding(vertical = 8.dp)
-                                )
-
-                                Spacer(modifier = Modifier.height(12.dp))
-
-                                // Botão Próxima Fase (Totalmente visível e clicável abaixo do banner)
+                                // Botão Próxima Fase (Primeira ação principal)
                                 Button(
                                     onClick = onNextLevel,
                                     colors = ButtonDefaults.buttonColors(
@@ -623,6 +614,7 @@ fun VictoryScreen(
 
                                 Spacer(modifier = Modifier.height(10.dp))
 
+                                // Botões Secundários: Jogar Novamente e Home
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -681,6 +673,15 @@ fun VictoryScreen(
                                         )
                                     }
                                 }
+
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                // Banner AdMob (Último elemento de conteúdo, posicionado abaixo de todos os botões)
+                                BannerAdContainer(
+                                    screenName = "Game_Victory",
+                                    isAdsRemoved = isAdsRemoved,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
                             }
                         }
                     }
