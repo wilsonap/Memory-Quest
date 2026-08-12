@@ -26,16 +26,31 @@ import com.example.config.AdMobManager
 import com.example.config.FirebaseBootstrap
 import com.example.ui.screens.config.FirebaseConfigErrorScreen
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.ui.Alignment
+import com.example.update.InAppUpdateManager
+import com.example.ui.components.InAppUpdateBanner
+
 class MainActivity : AppCompatActivity() {
 
     private val mainViewModel: MainViewModel by viewModels()
     private val gameViewModel: GameViewModel by viewModels()
     private lateinit var connectivityObserver: ConnectivityObserver
+    private lateinit var inAppUpdateManager: InAppUpdateManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         android.util.Log.i("MemoryQuestAudio", "MainActivity criada")
         enableEdgeToEdge()
+
+        // Inicializa o gerenciador de atualizações In-App oficial da Google Play
+        try {
+            inAppUpdateManager = InAppUpdateManager.getInstance(applicationContext)
+            inAppUpdateManager.checkForUpdate(this)
+        } catch (e: Throwable) {
+            android.util.Log.w("MainActivity", "Erro ao inicializar InAppUpdateManager: ${e.message}")
+        }
 
         if (!FirebaseBootstrap.isReady) {
             try {
@@ -82,19 +97,45 @@ class MainActivity : AppCompatActivity() {
 
         setContent {
             val language by mainViewModel.language.collectAsStateWithLifecycle()
+            val isUpdateDownloaded by if (::inAppUpdateManager.isInitialized) {
+                inAppUpdateManager.isUpdateDownloaded.collectAsStateWithLifecycle()
+            } else {
+                androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+            }
 
             LaunchedEffect(language) {
                 applyAppLanguage(language)
             }
 
             MemoryQuestTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    MemoryQuestNavGraph(
-                        mainViewModel = mainViewModel,
-                        gameViewModel = gameViewModel
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Surface(modifier = Modifier.fillMaxSize()) {
+                        MemoryQuestNavGraph(
+                            mainViewModel = mainViewModel,
+                            gameViewModel = gameViewModel
+                        )
+                    }
+
+                    InAppUpdateBanner(
+                        isDownloaded = isUpdateDownloaded,
+                        onRestartAndInstallClick = {
+                            if (::inAppUpdateManager.isInitialized) {
+                                inAppUpdateManager.completeUpdate()
+                            }
+                        },
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .statusBarsPadding()
                     )
                 }
             }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::inAppUpdateManager.isInitialized) {
+            inAppUpdateManager.onResume(this)
         }
     }
 
@@ -132,6 +173,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        if (::inAppUpdateManager.isInitialized) {
+            inAppUpdateManager.unregisterListener()
+        }
         if (::connectivityObserver.isInitialized) {
             connectivityObserver.stopListening()
         }

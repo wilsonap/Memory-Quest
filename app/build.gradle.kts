@@ -82,6 +82,7 @@ dependencies {
   implementation(libs.play.services.ads)
   implementation(libs.user.messaging.platform)
   implementation(libs.play.review.ktx)
+  implementation(libs.play.app.update.ktx)
   implementation(libs.androidx.media3.exoplayer)
 
   implementation(libs.androidx.activity.compose)
