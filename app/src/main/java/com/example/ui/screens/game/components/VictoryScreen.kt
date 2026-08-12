@@ -569,14 +569,27 @@ fun VictoryScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(20.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                        // 7. BOTÕES DE AÇÃO (Apenas 3 botões)
+                        // 7. BANNER ADMOB & BOTÕES DE AÇÃO (Banner posicionado estritamente ANTES dos botões)
                         AnimatedVisibility(
                             visible = buttonsVisible,
                             enter = fadeIn(tween(400)) + slideInVertically { 30 }
                         ) {
-                            Column(modifier = Modifier.fillMaxWidth()) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                // Banner AdMob com área própria e reservada
+                                BannerAdContainer(
+                                    screenName = "Game_Victory",
+                                    isAdsRemoved = isAdsRemoved,
+                                    modifier = Modifier.padding(vertical = 8.dp)
+                                )
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                // Botão Próxima Fase (Totalmente visível e clicável abaixo do banner)
                                 Button(
                                     onClick = onNextLevel,
                                     colors = ButtonDefaults.buttonColors(
@@ -669,10 +682,6 @@ fun VictoryScreen(
                                     }
                                 }
                             }
-
-                            // Banner Ad on Victory Screen
-                            Spacer(modifier = Modifier.height(16.dp))
-                            BannerAdContainer(screenName = "Game_Victory", isAdsRemoved = isAdsRemoved)
                         }
                     }
                 }
