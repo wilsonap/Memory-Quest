@@ -88,6 +88,7 @@ fun MemoryQuestNavGraph(
     val sfxVolume by mainViewModel.sfxVolume.collectAsStateWithLifecycle()
     val isAdsRemoved by mainViewModel.isAdsRemoved.collectAsStateWithLifecycle()
     val language by mainViewModel.language.collectAsStateWithLifecycle()
+    val isRewardedAdProcessing by mainViewModel.isRewardedAdProcessing.collectAsStateWithLifecycle()
 
     val gameState by gameViewModel.uiState.collectAsStateWithLifecycle()
     val userConsentState by mainViewModel.userConsentState.collectAsStateWithLifecycle()
@@ -349,6 +350,7 @@ fun MemoryQuestNavGraph(
                         Toast.makeText(context, "Atividade indisponível para carregar vídeo.", Toast.LENGTH_SHORT).show()
                     }
                 },
+                isRewardedAdProcessing = isRewardedAdProcessing,
                 onBackClick = { navController.popBackStack() },
                 isAdsRemoved = isAdsRemoved
             )

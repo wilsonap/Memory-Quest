@@ -62,6 +62,7 @@ class RewardedManager(
     fun show(activity: Activity, onUserEarnedReward: (amount: Int, type: String) -> Unit, onAdDismissed: () -> Unit = {}) {
         val ad = rewardedAd
         if (ad != null) {
+            val rewardDelivered = java.util.concurrent.atomic.AtomicBoolean(false)
             ad.fullScreenContentCallback = object : FullScreenContentCallback() {
                 override fun onAdDismissedFullScreenContent() {
                     rewardedAd = null
@@ -87,10 +88,14 @@ class RewardedManager(
             }
 
             ad.show(activity) { rewardItem ->
-                if (BuildConfig.DEBUG) {
-                    Log.d(TAG, "[DEBUG LOG] Recompensa recebida: ${rewardItem.amount} x ${rewardItem.type}")
+                if (rewardDelivered.compareAndSet(false, true)) {
+                    if (BuildConfig.DEBUG) {
+                        Log.d(TAG, "[DEBUG LOG] Recompensa recebida: ${rewardItem.amount} x ${rewardItem.type}")
+                    }
+                    onUserEarnedReward(rewardItem.amount, rewardItem.type)
+                } else {
+                    Log.w(TAG, "Recompensa duplicada do mesmo Rewarded Ad ignorada.")
                 }
-                onUserEarnedReward(rewardItem.amount, rewardItem.type)
             }
         } else {
             if (BuildConfig.DEBUG) {

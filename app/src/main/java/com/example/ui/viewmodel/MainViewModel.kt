@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 
 import com.example.audio.GameAudioManager
 import com.example.audio.SoundEffect
@@ -103,6 +104,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _isOnline = MutableStateFlow(true)
     val isOnline: StateFlow<Boolean> = _isOnline.asStateFlow()
+
+    /** Bloqueia novos cliques enquanto Rewarded Ad de moedas está carregando/exibindo. */
+    private val _isRewardedAdProcessing = MutableStateFlow(false)
+    val isRewardedAdProcessing: StateFlow<Boolean> = _isRewardedAdProcessing.asStateFlow()
+    private val rewardedAdSessionGate = AtomicBoolean(false)
+    private val rewardedAdRewardGranted = AtomicBoolean(false)
 
     private var connectivityObserver: ConnectivityObserver? = null
     private var wasOffline = false
@@ -526,6 +533,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 when (boosterId) {
                     "booster_life" -> repository.addExtraLives(3)
                     "booster_hint" -> repository.addHints(3)
+                    "booster_reveal" -> repository.addInventoryBooster("booster_reveal", 1)
                     else -> {}
                 }
                 audioManager.playCoin()
@@ -582,29 +590,51 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun showRewardedAd(activity: android.app.Activity, onResult: (Boolean, String) -> Unit) {
+        // Proteção contra múltiplos cliques / sessões paralelas
+        if (!rewardedAdSessionGate.compareAndSet(false, true)) {
+            Log.d("RewardedAd", "Ignorando clique: anúncio já em processamento.")
+            return
+        }
+        rewardedAdRewardGranted.set(false)
+        _isRewardedAdProcessing.value = true
+
+        fun finishProcessing() {
+            _isRewardedAdProcessing.value = false
+            rewardedAdSessionGate.set(false)
+        }
+
         val rewardedManager = com.example.config.RewardedManager(activity)
         rewardedManager.loadAd(
             onAdLoaded = {
                 rewardedManager.show(
                     activity = activity,
-                    onUserEarnedReward = { _, _ ->
+                    onUserEarnedReward = reward@{ _, _ ->
+                        // Idempotência: um mesmo anúncio só concede recompensa uma vez
+                        if (!rewardedAdRewardGranted.compareAndSet(false, true)) {
+                            Log.w("RewardedAd", "Callback de recompensa duplicado ignorado.")
+                            return@reward
+                        }
                         viewModelScope.launch {
                             val success = repository.claimRewardedAdCoins()
                             if (success) {
                                 audioManager.playCoin()
                                 onResult(true, "Você ganhou 100 moedas!")
                             } else {
-                                onResult(false, "Limite diário de 5 vídeos atingido.")
+                                onResult(false, "Limite diário de ${com.example.data.repository.GameRepository.DAILY_REWARDED_ADS_LIMIT} vídeos atingido.")
                             }
                         }
                     },
                     onAdDismissed = {
-                        // Ad dismissed
+                        finishProcessing()
                     }
                 )
             },
             onAdFailed = {
-                onResult(false, "Vídeo não disponível no momento. Tente novamente em instantes.")
+                finishProcessing()
+                onResult(
+                    false,
+                    "Não foi possível carregar o anúncio. Tente novamente em alguns instantes."
+                )
             }
         )
     }

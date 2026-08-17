@@ -377,7 +377,7 @@ fun DailyQuestsDialog(
                             Spacer(modifier = Modifier.height(8.dp))
 
                             if (rewardType == "COINS" && !isChestDoubled) {
-                                val remainingAdsToday = (5 - (player?.rewardedAdsToday ?: 0)).coerceAtLeast(0)
+                                val remainingAdsToday = (com.example.data.repository.GameRepository.DAILY_REWARDED_ADS_LIMIT - (player?.rewardedAdsToday ?: 0)).coerceAtLeast(0)
                                 if (remainingAdsToday > 0) {
                                     Button(
                                         onClick = onDoubleReward,

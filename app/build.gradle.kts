@@ -15,8 +15,8 @@ android {
     applicationId = "br.com.autocheckia.memory"
     minSdk = 24
     targetSdk = 36
-    versionCode = 11
-    versionName = "1.2.1"
+    versionCode = 12
+    versionName = "1.2.2"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     manifestPlaceholders["admobAppId"] = "ca-app-pub-9508188839425769~9719772999"

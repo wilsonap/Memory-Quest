@@ -139,6 +139,12 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             val startingLives = defaultLives + bonusLives
             val availableHints = player?.remainingHints ?: 3
 
+            // Preserva quantidades do inventário Room (startLevel não pode zerar free*Count)
+            val inventoryItems = repository.inventoryFlow.firstOrNull().orEmpty()
+            val freeHints = inventoryItems.find { it.itemId == "booster_hint" }?.quantity ?: 0
+            val freeReveals = inventoryItems.find { it.itemId == "booster_reveal" }?.quantity ?: 0
+            val freeFreezes = inventoryItems.find { it.itemId == "booster_freeze" }?.quantity ?: 0
+
             _uiState.value = GameState(
                 levelNumber = level,
                 cards = rawCards,
@@ -153,6 +159,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 status = GameUiStatus.Previewing(levelConfig.previewSeconds),
                 elapsedTimeSeconds = 0,
                 remainingHints = availableHints,
+                freeHintsCount = freeHints,
+                freeRevealsCount = freeReveals,
+                freeFreezesCount = freeFreezes,
                 theme = selectedTheme,
                 frameId = equippedFrame
             )
@@ -466,33 +475,53 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun useRevealPair() {
         viewModelScope.launch {
-            val hasFree = repository.consumeInventoryBooster("booster_reveal")
-            if (hasFree || repository.spendCoins(150, "REVEAL_PAIR")) {
-                audioManager.playReveal()
-                val unmatched = _uiState.value.cards.filter { !it.isMatched }
-                val pair = unmatched.groupBy { it.pairId }.values.find { it.size >= 2 } ?: return@launch
+            if (_uiState.value.status != GameUiStatus.Playing) return@launch
 
-                val updatedCards = _uiState.value.cards.map {
-                    if (it.id == pair[0].id || it.id == pair[1].id) {
-                        it.copy(isFaceUp = true, isMatched = true)
-                    } else it
-                }
-
-                val newPairsFound = _uiState.value.pairsFound + 1
-                _uiState.update { state ->
-                    state.copy(
-                        cards = updatedCards,
-                        pairsFound = newPairsFound
-                    )
-                }
-
-                repository.updateDailyQuestProgress("FIND_PAIRS", 1)
-
-                if (newPairsFound >= _uiState.value.totalPairs) {
-                    onLevelSuccess()
-                }
-            } else {
+            // 1) Seleciona um par ainda não encontrado (sem consumir ainda)
+            val unmatched = _uiState.value.cards.filter { !it.isMatched }
+            val pair = unmatched.groupBy { it.pairId }.values.find { it.size >= 2 }
+            if (pair == null) {
                 audioManager.playMismatch()
+                return@launch
+            }
+
+            val hasFree = repository.getInventoryQuantity("booster_reveal") > 0
+            if (!hasFree) {
+                val playerCoins = repository.playerFlow.firstOrNull()?.coins ?: 0
+                if (playerCoins < 150) {
+                    audioManager.playMismatch()
+                    return@launch
+                }
+            }
+
+            // 2) Revela o par conforme a mecânica atual
+            audioManager.playReveal()
+            val updatedCards = _uiState.value.cards.map {
+                if (it.id == pair[0].id || it.id == pair[1].id) {
+                    it.copy(isFaceUp = true, isMatched = true)
+                } else it
+            }
+
+            val newPairsFound = _uiState.value.pairsFound + 1
+            _uiState.update { state ->
+                state.copy(
+                    cards = updatedCards,
+                    pairsFound = newPairsFound
+                )
+            }
+
+            // 3) Consome inventário / moedas somente após sucesso da ação
+            if (hasFree) {
+                repository.consumeInventoryBooster("booster_reveal")
+            } else if (!repository.spendCoins(150, "REVEAL_PAIR")) {
+                audioManager.playMismatch()
+                return@launch
+            }
+
+            repository.updateDailyQuestProgress("FIND_PAIRS", 1)
+
+            if (newPairsFound >= _uiState.value.totalPairs) {
+                onLevelSuccess()
             }
         }
     }

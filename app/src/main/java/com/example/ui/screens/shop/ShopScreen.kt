@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -69,6 +70,7 @@ import com.example.data.local.entity.PlayerEntity
 import com.example.data.local.entity.UnlockedThemeEntity
 import com.example.data.model.GameTheme
 import com.example.data.model.ShopItem
+import com.example.data.repository.GameRepository
 import com.example.ui.components.BannerAdContainer
 import com.example.ui.components.BannerAdView
 import com.example.ui.components.TopGameBar
@@ -83,6 +85,7 @@ fun ShopScreen(
     onBuyFrame: (ShopItem) -> Unit,
     onBuyBooster: (String, Int) -> Unit,
     onWatchRewardedAd: () -> Unit = {},
+    isRewardedAdProcessing: Boolean = false,
     onBackClick: () -> Unit,
     isAdsRemoved: Boolean = false,
     modifier: Modifier = Modifier
@@ -95,8 +98,8 @@ fun ShopScreen(
     val todayString = remember { dateFormat.format(java.util.Date()) }
     val remainingVideos = remember(player?.rewardedAdsDate, player?.rewardedAdsToday) {
         if (player?.rewardedAdsDate == todayString) {
-            (5 - (player.rewardedAdsToday)).coerceAtLeast(0)
-        } else 5
+            (GameRepository.DAILY_REWARDED_ADS_LIMIT - (player.rewardedAdsToday)).coerceAtLeast(0)
+        } else GameRepository.DAILY_REWARDED_ADS_LIMIT
     }
 
     Scaffold(
@@ -193,7 +196,11 @@ fun ShopScreen(
 
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            text = "Ganhar Moedas Grátis",
+                                            text = if (isRewardedAdProcessing) {
+                                                "Carregando anúncio..."
+                                            } else {
+                                                "Ganhar Moedas Grátis"
+                                            },
                                             style = MaterialTheme.typography.titleMedium.copy(
                                                 fontWeight = FontWeight.Bold,
                                                 color = Color(0xFFFFB703)
@@ -201,7 +208,11 @@ fun ShopScreen(
                                         )
                                         Spacer(modifier = Modifier.height(2.dp))
                                         Text(
-                                            text = if (remainingVideos > 0) "Assista a um vídeo curto e ganhe +100 🪙 ($remainingVideos/5 hoje)" else "Limite de 5 vídeos atingido hoje. Volte amanhã!",
+                                            text = when {
+                                                isRewardedAdProcessing -> "Aguarde, preparando o vídeo recompensado."
+                                                remainingVideos > 0 -> "Assista a um vídeo curto e ganhe +100 🪙 ($remainingVideos/${GameRepository.DAILY_REWARDED_ADS_LIMIT} hoje)"
+                                                else -> "Limite de ${GameRepository.DAILY_REWARDED_ADS_LIMIT} vídeos atingido hoje. Volte amanhã!"
+                                            },
                                             style = MaterialTheme.typography.bodySmall.copy(
                                                 color = Color.White.copy(alpha = 0.8f)
                                             )
@@ -212,20 +223,28 @@ fun ShopScreen(
 
                                     Button(
                                         onClick = onWatchRewardedAd,
-                                        enabled = remainingVideos > 0,
+                                        enabled = remainingVideos > 0 && !isRewardedAdProcessing,
                                         colors = ButtonDefaults.buttonColors(
                                             containerColor = Color(0xFFFFB703),
                                             disabledContainerColor = Color(0xFF383120)
                                         ),
                                         shape = RoundedCornerShape(12.dp)
                                     ) {
-                                        Text(
-                                            text = "+100 🪙",
-                                            style = MaterialTheme.typography.labelLarge.copy(
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (remainingVideos > 0) Color.Black else Color.Gray
+                                        if (isRewardedAdProcessing) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(18.dp),
+                                                strokeWidth = 2.dp,
+                                                color = Color(0xFFFFB703)
                                             )
-                                        )
+                                        } else {
+                                            Text(
+                                                text = "+100 🪙",
+                                                style = MaterialTheme.typography.labelLarge.copy(
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (remainingVideos > 0) Color.Black else Color.Gray
+                                                )
+                                            )
+                                        }
                                     }
                                 }
                             }

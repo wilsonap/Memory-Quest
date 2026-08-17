@@ -21,6 +21,13 @@ class GameRepository(
     private val dao: MemoryQuestDao,
     private val dataStoreManager: DataStoreManager
 ) {
+    companion object {
+        /** Limite diário de anúncios recompensados (Ganhar Moedas Grátis / contador compartilhado). */
+        const val DAILY_REWARDED_ADS_LIMIT = 6
+
+        val DAILY_REWARDS = listOf(50, 75, 100, 125, 150, 200, 300)
+    }
+
     val playerFlow: Flow<PlayerEntity?> = dao.getPlayerFlow()
     val statisticsFlow: Flow<StatisticsEntity?> = dao.getStatisticsFlow()
 
@@ -35,10 +42,6 @@ class GameRepository(
     val sfxVolume: Flow<Float> = dataStoreManager.sfxVolume
     val isAdsRemoved: Flow<Boolean> = dataStoreManager.isAdsRemoved
     val language: Flow<String> = dataStoreManager.language
-
-    companion object {
-        val DAILY_REWARDS = listOf(50, 75, 100, 125, 150, 200, 300)
-    }
 
     data class DailyRewardStatus(
         val canClaim: Boolean,
@@ -204,8 +207,8 @@ class GameRepository(
             0 to todayString
         }
 
-        if (todayCount >= 5) {
-            Log.w("RewardedAd", "Daily limit of 5 ads reached for today.")
+        if (todayCount >= DAILY_REWARDED_ADS_LIMIT) {
+            Log.w("RewardedAd", "Daily limit of $DAILY_REWARDED_ADS_LIMIT ads reached for today.")
             return false
         }
 
@@ -220,13 +223,13 @@ class GameRepository(
     }
 
     suspend fun getRemainingRewardedAdsToday(): Int {
-        val player = dao.getPlayer() ?: return 5
+        val player = dao.getPlayer() ?: return DAILY_REWARDED_ADS_LIMIT
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         val todayString = dateFormat.format(Date())
         return if (player.rewardedAdsDate == todayString) {
-            (5 - player.rewardedAdsToday).coerceAtLeast(0)
+            (DAILY_REWARDED_ADS_LIMIT - player.rewardedAdsToday).coerceAtLeast(0)
         } else {
-            5
+            DAILY_REWARDED_ADS_LIMIT
         }
     }
 
@@ -417,6 +420,23 @@ class GameRepository(
 
     val inventoryFlow: Flow<List<com.example.data.local.entity.InventoryEntity>> = dao.getInventoryFlow()
 
+    suspend fun getInventoryQuantity(itemId: String): Int {
+        return dao.getInventoryItem(itemId)?.quantity ?: 0
+    }
+
+    suspend fun addInventoryBooster(itemId: String, amount: Int = 1) {
+        if (amount <= 0) return
+        val existing = dao.getInventoryItem(itemId)
+        val newQty = (existing?.quantity ?: 0) + amount
+        dao.insertOrUpdateInventoryItem(
+            com.example.data.local.entity.InventoryEntity(
+                itemId = itemId,
+                itemType = "BOOSTER",
+                quantity = newQty
+            )
+        )
+    }
+
     suspend fun consumeInventoryBooster(itemId: String): Boolean {
         val item = dao.getInventoryItem(itemId) ?: return false
         if (item.quantity > 1) {
@@ -587,7 +607,7 @@ class GameRepository(
         }
 
         val currentAdsWatched = if (player.rewardedAdsDate == today) player.rewardedAdsToday else 0
-        if (currentAdsWatched >= 5) {
+        if (currentAdsWatched >= DAILY_REWARDED_ADS_LIMIT) {
             return false
         }
 

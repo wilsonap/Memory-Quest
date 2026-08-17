@@ -59,6 +59,7 @@ import com.example.avatar.model.AvatarType
 import com.example.avatar.ui.AvatarImage
 import com.example.data.local.entity.DailyQuestEntity
 import com.example.data.local.entity.PlayerEntity
+import com.example.data.repository.GameRepository
 import com.example.ui.components.BannerAdContainer
 import com.example.ui.components.BannerAdView
 import com.example.ui.components.DailyQuestsCard
@@ -368,8 +369,8 @@ fun HomeScreen(
             val isDailyClaimed = lastRewardDateString == todayString
             val remainingVideosToday = remember(player?.rewardedAdsDate, player?.rewardedAdsToday) {
                 if (player?.rewardedAdsDate == todayString) {
-                    (5 - (player.rewardedAdsToday)).coerceAtLeast(0)
-                } else 5
+                    (GameRepository.DAILY_REWARDED_ADS_LIMIT - (player.rewardedAdsToday)).coerceAtLeast(0)
+                } else GameRepository.DAILY_REWARDED_ADS_LIMIT
             }
 
             Surface(
@@ -397,7 +398,7 @@ fun HomeScreen(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = if (isDailyClaimed) "Vídeos premiados hoje: $remainingVideosToday/5 restantes (+100 🪙 cada)" else "Resgate suas moedas diárias gratuitas!",
+                            text = if (isDailyClaimed) "Vídeos premiados hoje: $remainingVideosToday/${GameRepository.DAILY_REWARDED_ADS_LIMIT} restantes (+100 🪙 cada)" else "Resgate suas moedas diárias gratuitas!",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 color = ImmersiveTextSecondary,
                                 fontSize = 11.sp
